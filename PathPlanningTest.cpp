@@ -121,11 +121,21 @@ int main(int argc,char* argv[])
   scanf("%d",&option);
   printf("Waiting for poses \n");
 
-  roverX = 60.0;
-  roverY = 20.0;
-  roverYaw = 90.0*3.14/180.0;
-  goalX = 10.0;
-  goalY = 10.0;
+    std::vector<base::Waypoint> trajectory;
+    base::Waypoint wRover;
+    wRover.position[0] = 60.0;
+    wRover.position[1] = 20.0;
+    wRover.heading = 90.0*M_PI/180.0;
+    base::Waypoint wGoal;
+    wGoal.position[0] = 10.0;
+    wGoal.position[1] = 10.0;
+    wGoal.heading = 90.0*M_PI/180.0;
+
+  /*goalX = 10.0;
+  goalY = 10.0;*/
+    aresPlanner.initNodeMatrix(elevationMatrix, frictionMatrix, slipMatrix, riskMatrix);
+    aresPlanner.setStartNode(wRover);
+    trajectory = aresPlanner.fastMarching(wRover,wGoal);
 /*
   aresPlanner.initNodeMatrix(elevationMatrix, frictionMatrix, slipMatrix, riskMatrix);
   aresPlanner.setOffset(xd,yd,theta);

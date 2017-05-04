@@ -48,6 +48,16 @@ bool PathPlanning::setStartNode(base::Pose2D startPose)
     return true;
 }
 
+bool PathPlanning::setStartNode(base::Waypoint wStart)
+{
+    unsigned int x = (uint)wStart.position[0];
+    unsigned int y = (uint)wStart.position[1];
+    if ((nodeStart = getNode(x,y))==NULL)
+        return false;
+    //nodeStart->roverPose = startPose; FIX THIS
+    return true;
+}
+
 
 
 bool PathPlanning::setGoal(double gx, double gy){
@@ -260,7 +270,7 @@ void PathPlanning::propagationFunction(Node* nodeTarget, std::vector<Node*>& nar
   }
 }
 
-std::vector<base::Waypoint> PathPlanning::fastMarching(base::Waypoint wStart, base::Waypoint wGoal, std::vector< std::vector<Node*> > nodeMatrix)
+std::vector<base::Waypoint> PathPlanning::fastMarching(base::Waypoint wStart, base::Waypoint wGoal)
 {
     Node * nodeTarget = getNode(wStart.position[0], wStart.position[1]);
     if (nodeTarget == NULL)
@@ -299,8 +309,8 @@ std::vector<base::Waypoint> PathPlanning::fastMarching(base::Waypoint wStart, ba
 
 double PathPlanning::costFunction(Node* nodeTarget){
 
-    double mu = nodeTarget->friction;
-    double s = nodeTarget->slip;
+    double mu = nodeTarget->soil.friction;
+    double s = nodeTarget->soil.slip;
     double ri = nodeTarget->risk;
     double m = 20.0;
     double g = 3.711;

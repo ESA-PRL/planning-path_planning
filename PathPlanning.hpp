@@ -89,25 +89,24 @@ namespace PathPlanning_lib
   double globalY;  // Y in map
   double height;
   double elevation;
-  double friction;
-  double slip;
   
   double aspect;
-  double s; // slip ratio
-  double mu;
   
   double solarExposure;
 
 
-        Node()
-        {
-            cost = INF;
-            closed = false;
-            state = OPEN;
-            nodeParent = NULL;
-        }
+    Node()
+    {
+        cost = INF;
+        closed = false;
+        state = OPEN;
+        nodeParent = NULL;
+    }
 
-        Node(uint x_, uint y_, double e_, double f_, double s_, double r_) : x(x_), y(y_), elevation(e_), friction(f_), slip(s_), risk(r_){
+    Node(uint x_, uint y_, double e_, double f_, double s_, double r_) : x(x_), y(y_), elevation(e_), risk(r_)
+    {
+        soil.friction = f_;
+        soil.slip = s_;
         work = INF;
     /*if ((risk>0.9)||(slip==1))
       state = CLOSED;
@@ -117,7 +116,7 @@ namespace PathPlanning_lib
     nodeParent = NULL;
     dx = (double)x_;
     dy = (double)y_;
-  }
+    }
 };
 
 
@@ -144,6 +143,7 @@ namespace PathPlanning_lib
             ~PathPlanning();
             bool setStartNode(base::samples::RigidBodyState startPose);
             bool setStartNode(base::Pose2D startPose);
+            bool setStartNode(base::Waypoint wStart);
     double WD;
     double WO;
     double WM;
@@ -158,7 +158,7 @@ namespace PathPlanning_lib
                             std::vector< std::vector<double> > slip, std::vector< std::vector<double> > risk);
     Node* getNode(uint x, uint y);
     void showNodeMatrix();
-            std::vector<base::Waypoint> fastMarching(base::Waypoint wStart, base::Waypoint wGoal, std::vector< std::vector<Node*> > nodeMatrix);
+            std::vector<base::Waypoint> fastMarching(base::Waypoint wStart, base::Waypoint wGoal);
             double getPropagation(Node* nodeTarget);
             void setPropagation(Node* nodeTarget, double value);
             void calculateFieldGradient(std::vector< std::vector<double> > field,
@@ -175,7 +175,7 @@ namespace PathPlanning_lib
     Node* minCostNode(std::vector<Node*>& nodeList);
     void interpolateWaypoint(double x, double y, double& dCostX, double& dCostY, double& L);
     std::vector<Node*> nodePath;
-    std::vector<base::Waypoint> trajectory;
+    
     void clearPath();
 };
 
