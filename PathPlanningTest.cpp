@@ -126,7 +126,7 @@ int main(int argc,char* argv[])
   roverYaw = 90.0*3.14/180.0;
   goalX = 10.0;
   goalY = 10.0;
-
+/*
   aresPlanner.initNodeMatrix(elevationMatrix, frictionMatrix, slipMatrix, riskMatrix);
   aresPlanner.setOffset(xd,yd,theta);
   aresPlanner.setStart(roverX,roverY,roverYaw);
@@ -183,8 +183,8 @@ int main(int argc,char* argv[])
   /*for (uint j = 0; j<64 ; j++){
     std::cout << elevationMatrix[63][j] << " ";
   }
-  std::cout << '\n';*/
+  std::cout << '\n';
   printf("1-A* 2-Dijkstra 3-Fast Marching 0-Exit \n");
-  scanf("%d",&option);
+  scanf("%d",&option);*/
   return(0);
 }
