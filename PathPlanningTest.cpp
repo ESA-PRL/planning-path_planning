@@ -57,32 +57,11 @@ std::vector< std::vector<double> > readMatrixFile(std::string map_file, double& 
 // Main code:
 int main(int argc,char* argv[])
 {
-  // Node Initialization
-  printf("ExoTER ARES Path Planning Node started\n");
-  // SUBSCRIBERS
-// IMPORTING DATA PROCESS
-  std::string infoPath, heightPath, costPath, locPath;
-  std::ifstream infofile, heightfile, costfile, locfile;
-
-  infoPath = "../terrainData/crater/crater_info.txt";
-  heightPath = "../terrainData/crater/crater_heightMap.txt";
-  costPath = "../terrainData/crater/crater_costMap.txt";
-  locPath = "../terrainData/crater/crater_locMap.txt";
-
-  infofile.open("../terrainData/crater/crater_info.txt");
-  std::cout << "infoPath = " << infoPath << std::endl;
-  heightfile.open("../terrainData/crater/crater_heightMap.txt");
-  costfile.open("../terrainData/crater/crater_costMap.txt");
-  locfile.open("../terrainData/crater/crater_locMap.txt");
-
-  if (! (heightfile.is_open()||(infofile.is_open()))){
-    printf("No map!!\n");
-    return(0);
-  }
+    printf("ExoTER ARES Path Planning Test started\n");
+  // IMPORTING DATA PROCESS
   uint sizeX, sizeY;
   double minHeight, xd, yd, theta, scale;
 
-  infofile >> sizeX >> sizeY >> minHeight >> xd >> yd >> theta >> scale;
 
   double Nraw, Ncol;
 
@@ -91,21 +70,6 @@ int main(int argc,char* argv[])
   std::vector< std::vector<double> > slipMatrix = readMatrixFile("../terrainData/crater/slip_map.txt", Nraw, Ncol);
   std::vector< std::vector<double> > riskMatrix = readMatrixFile("../terrainData/crater/risk_map.txt", Nraw, Ncol);
 
-  double heightMap[sizeX*sizeY];
-  double costMap[sizeX*sizeY];
-  double locMap[sizeX*sizeY];
-
-  for (size_t j = 0; j<sizeY; j++)
-    for (size_t i = 0; i<sizeX; i++){
-      heightfile    >> heightMap[i+j*sizeX];
-      costfile      >> costMap[i+j*sizeX];
-      locfile       >> locMap[i+j*sizeX];
-    }
-
-  heightfile.close();
-  costfile.close();
-  locfile.close();
-  infofile.close();
   // IMPORTING DATA PROCESS - end
 
   PathPlanning aresPlanner;
@@ -131,70 +95,12 @@ int main(int argc,char* argv[])
     wGoal.position[1] = 10.0;
     wGoal.heading = 90.0*M_PI/180.0;
 
-  /*goalX = 10.0;
-  goalY = 10.0;*/
     aresPlanner.initNodeMatrix(elevationMatrix, frictionMatrix, slipMatrix, riskMatrix);
     aresPlanner.setStartNode(wRover);
     trajectory = aresPlanner.fastMarching(wRover,wGoal);
-/*
-  aresPlanner.initNodeMatrix(elevationMatrix, frictionMatrix, slipMatrix, riskMatrix);
-  aresPlanner.setOffset(xd,yd,theta);
-  aresPlanner.setStart(roverX,roverY,roverYaw);
-  aresPlanner.setGoal(goalX,goalY);
-
-    switch (option) {
-      case 1:
-        aresPlanner.setPlanningMode(SAFEST);
-        aresPlanner.astarAlgorithm();
-        break;
-      case 2:
-        aresPlanner.setPlanningMode(SAFEST);
-        aresPlanner.dijkstraAlgorithm();
-        break;
-      case 3:
-        aresPlanner.fastMarchingAlgorithm();
-        break;
-      default:
-        return(0);
-    }
-
-  numNodes = aresPlanner.trajectory.size();
-
-  //aresPlanner.showNodeMatrix();
-
-  for (size_t i = 0; i < numNodes; i++)
-  {
-    //trajectory.push_back(lpoint);
-    std::cout << " Segment: " << i << '\n';
-    std::cout << " X: " << aresPlanner.trajectory.at(i).position[0];
-    std::cout << " Y: " << aresPlanner.trajectory.at(i).position[1];
-    std::cout << " heading: " << aresPlanner.trajectory.at(i).heading;
-    std::cout << " LocMode: " << aresPlanner.trajectory.at(i).position[2] << '\n';
-  }
-
-  std::cout << " Trajectory: " << aresPlanner.trajectory.back().position <<'\n';
-  /*  pathNodes.layout.dim.clear(); //Inizializating pathNodes
-    pathNodes.data.clear();
-    
-    pathNodes.layout.dim.push_back(std_msgs::MultiArrayDimension());
-    pathNodes.layout.dim[0].label = "NumNodes";
-    pathNodes.layout.dim[0].size = numNodes;
-    std::cout << "NumNodes = " << numNodes << '\n';
-    for(uint i = 1; i<=numNodes;i++)
-    {
-      pathNodes.data.push_back(aresPlanner.nodePath[numNodes-i]->globalX);
-      pathNodes.data.push_back(aresPlanner.nodePath[numNodes-i]->globalY);
-      pathNodes.data.push_back(aresPlanner.nodePath[numNodes-i]->height
-                                - minHeight);
-      pathNodes.data.push_back(aresPlanner.nodePath[numNodes-i]->heading);
-      pathNodes.data.push_back(aresPlanner.nodePath[numNodes-i]->nodeLocMode);
-
-    }*/
-  /*for (uint j = 0; j<64 ; j++){
-    std::cout << elevationMatrix[63][j] << " ";
-  }
-  std::cout << '\n';
-  printf("1-A* 2-Dijkstra 3-Fast Marching 0-Exit \n");
-  scanf("%d",&option);*/
-  return(0);
+    std::cout<< "Trajectory has " << trajectory.size() << " Waypoints" << std::endl;
+    for (unsigned int i = 0; i<trajectory.size(); i++)
+	std::cout << "Waypoint " << i << " -> Pos: (" << trajectory[i].position[0] << "," << trajectory[i].position[1] << ") Loc: " << trajectory[i].position[2] 
+                  << " Heading: " << trajectory[i].heading << std::endl;
+    return(0);
 }

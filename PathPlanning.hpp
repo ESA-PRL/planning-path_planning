@@ -49,6 +49,8 @@ namespace PathPlanning_lib
 
     struct Node {
       //Node Parameters
+        uint x; // X in grid
+        uint y; // Y in grid
         base::Pose2D pose; // X-Y-aspect
         double slope;
         terrainProperties soil;
@@ -59,8 +61,7 @@ namespace PathPlanning_lib
         
   bool closed;
   
-  uint x; // X in grid
-  uint y; // Y in grid
+  
   double dx; //X in grid (double) for fastMarching
   double dy; //Y in grid (double) for fastMarching
   Node *nodeParent;
