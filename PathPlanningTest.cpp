@@ -60,7 +60,6 @@ int main(int argc,char* argv[])
     printf("ExoTER ARES Path Planning Test started\n");
   // IMPORTING DATA PROCESS
   uint sizeX, sizeY;
-  double minHeight, xd, yd, theta, scale;
 
 
   double Nraw, Ncol;
@@ -77,8 +76,6 @@ int main(int argc,char* argv[])
   uint numNodes;
 
   int option = 0;
-
-  aresPlanner.clearPath();
 
   printf("\nChoose Algorithm: \n");
   printf("1-A* 2-Dijkstra 3-Fast Marching 0-Exit \n");

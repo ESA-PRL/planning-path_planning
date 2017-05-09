@@ -9,43 +9,14 @@ using namespace PathPlanning_lib;
 PathPlanning::PathPlanning()
 {
     printf("Planner created successfully\n");
-    WD = 0.25;
-    WO = 0.25;
-    WM = 0.25;
-    WR = 0.25;
 }
 
 void PathPlanning::setPlanningMode(planningMode mode)
 {
-    switch (mode) {
-        case SHORTEST: WD = 0.5;  WO = 0.3;  WM = 0.1;  WR = 0.1;  break;
-        case SAFEST:   WD = 0.1;  WO = 0.1;  WM = 0.3;  WR = 0.5;  break;
-        case BALANCED: WD = 0.25; WO = 0.25; WM = 0.25; WR = 0.25; break;
-  }
 }
 
 PathPlanning::~PathPlanning()
 {
-}
-
-bool PathPlanning::setStartNode(base::samples::RigidBodyState startPose)
-{
-    unsigned int x = (uint)startPose.position[0];
-    unsigned int y = (uint)startPose.position[1];
-    if ((nodeStart = getNode(x,y))==NULL)
-        return false;
-    nodeStart->roverPose = startPose;
-    return true;
-}
-
-bool PathPlanning::setStartNode(base::Pose2D startPose)
-{
-    unsigned int x = (uint)startPose.position[0];
-    unsigned int y = (uint)startPose.position[1];
-    if ((nodeStart = getNode(x,y))==NULL)
-        return false;
-    //nodeStart->roverPose = startPose; FIX THIS
-    return true;
 }
 
 bool PathPlanning::setStartNode(base::Waypoint wStart)
@@ -54,11 +25,8 @@ bool PathPlanning::setStartNode(base::Waypoint wStart)
     unsigned int y = (uint)wStart.position[1];
     if ((nodeStart = getNode(x,y))==NULL)
         return false;
-    //nodeStart->roverPose = startPose; FIX THIS
     return true;
 }
-
-
 
 bool PathPlanning::setGoal(double gx, double gy){
   nodeGoal = getNode((uint)(gx),(uint)(gy));
@@ -410,9 +378,4 @@ void PathPlanning::interpolateWaypoint(double x, double y, double& dCostX, doubl
   //x(nuevo) = x(anterior) - tau * interpolatePoint(x(anterior), y(anterior), );
   //cost(nuevo) = interpolatePoint(gamma(end,:),cost);
   //height(nuevo) = interpolatePoint(gamma(end,:),heightMap);
-}
-
-void PathPlanning::clearPath()
-{
-  nodePath.clear();
 }

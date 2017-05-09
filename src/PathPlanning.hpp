@@ -127,31 +127,18 @@ namespace PathPlanning_lib
     class PathPlanning
     {
         private:
-   base::samples::RigidBodyState mStartPose;
-   double pathCost;
-   Node* nodeStart;
-   Node* nodeGoal;
-   //(Xd,Yd) Distance global frame -> Grid frame
-   double offsetX;
-   double offsetY;
-   //Angle between global frame and grid frame
-   double offsetTheta;
+            base::samples::RigidBodyState mStartPose;
+            double pathCost;
+            Node* nodeStart;
+            Node* nodeGoal;
             std::vector< std::vector<double> > propagationMatrix;
             std::vector< std::vector<double> > propagationGXMatrix;
             std::vector< std::vector<double> > propagationGYMatrix;
         public:
             PathPlanning();
             ~PathPlanning();
-            bool setStartNode(base::samples::RigidBodyState startPose);
-            bool setStartNode(base::Pose2D startPose);
             bool setStartNode(base::Waypoint wStart);
-    double WD;
-    double WO;
-    double WM;
-    double WR;
-    std::vector< std::vector<Node*> > nodeMatrix;
-    //void setOffset(double dx, double dy, double dtheta);
-    //bool setStart(double x, double y, double heading);
+            std::vector< std::vector<Node*> > nodeMatrix;
     bool setGoal(double x, double y);
     void setPlanningMode(planningMode mode);
     void showStart();
@@ -171,14 +158,10 @@ namespace PathPlanning_lib
     double costFunction(Node* nodeTarget);
     void heuristicCostFunction(Node* start, Node* goal);
     void calculatePitchRoll(double slope, double aspect, double yaw, double &roll, double &pitch);
-    void propagationFunction(Node* nodeTarget, std::vector<Node*>& narrowBand);
-    //void calculateCostGradient();
-    Node* minCostNode(std::vector<Node*>& nodeList);
-    void interpolateWaypoint(double x, double y, double& dCostX, double& dCostY, double& L);
-    std::vector<Node*> nodePath;
-    
-    void clearPath();
-};
+            void propagationFunction(Node* nodeTarget, std::vector<Node*>& narrowBand);
+            Node* minCostNode(std::vector<Node*>& nodeList);
+            void interpolateWaypoint(double x, double y, double& dCostX, double& dCostY, double& L);
+    };
 
 } // end namespace motion_planning_libraries
 
