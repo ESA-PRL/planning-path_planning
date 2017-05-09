@@ -93,7 +93,6 @@ int main(int argc,char* argv[])
     wGoal.heading = 90.0*M_PI/180.0;
 
     aresPlanner.initNodeMatrix(elevationMatrix, frictionMatrix, slipMatrix, riskMatrix);
-    aresPlanner.setStartNode(wRover);
     trajectory = aresPlanner.fastMarching(wRover,wGoal);
     std::cout<< "Trajectory has " << trajectory.size() << " Waypoints" << std::endl;
     for (unsigned int i = 0; i<trajectory.size(); i++)

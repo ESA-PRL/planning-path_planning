@@ -11,39 +11,8 @@ PathPlanning::PathPlanning()
     printf("Planner created successfully\n");
 }
 
-void PathPlanning::setPlanningMode(planningMode mode)
-{
-}
-
 PathPlanning::~PathPlanning()
 {
-}
-
-bool PathPlanning::setStartNode(base::Waypoint wStart)
-{
-    unsigned int x = (uint)wStart.position[0];
-    unsigned int y = (uint)wStart.position[1];
-    if ((nodeStart = getNode(x,y))==NULL)
-        return false;
-    return true;
-}
-
-bool PathPlanning::setGoal(double gx, double gy){
-  nodeGoal = getNode((uint)(gx),(uint)(gy));
-  nodeGoal->globalX = gx;
-  nodeGoal->globalY = gy;
-  if ((nodeGoal == NULL)||(nodeGoal->state != OPEN)){
-    printf("Start Node is either an obstacle or out of boundaries\n");
-    return false;
-  }
-  std::cout << "Goal Node: (" << nodeGoal->x << "," << nodeGoal->y << ")" <<'\n';
-  std::cout << "Goal Node height: " << nodeGoal->height <<'\n';
-  return true;
-}
-
-void PathPlanning::showStart(){
-  std::cout << "X: " << nodeStart->x << " Y: " << nodeStart->y;
-  std::cout << " Height: " << nodeStart->height << '\n';
 }
 
 void PathPlanning::initNodeMatrix(std::vector< std::vector<double> > elevation, std::vector< std::vector<double> > friction,
@@ -68,26 +37,6 @@ void PathPlanning::initNodeMatrix(std::vector< std::vector<double> > elevation, 
     }
 }
 
-
-void PathPlanning::showNodeMatrix(){
-  std::cout << "NodeMatrix: " << '\n';
-  for (uint j = 0; j < 64; j++){
-    for (uint i = 0; i < 64; i++)
-      std::cout << nodeMatrix[i][j]->work << " " ;
-    std::cout << '\n';
-  }
-}
-
-void PathPlanning::calculatePitchRoll(double slope, double aspect, double yaw, double &roll, double &pitch)
-{
-  double cs = cos(slope);
-  double ss = sin(slope);
-  double ca = cos(aspect + yaw);
-  double sa = sin(aspect + yaw);
-  roll = atan2(ss*sa,cs+ca*ss);
-  pitch = atan2(ss*ca,cs);
-}
-
 void PathPlanning::nodeUpdate(Node* node, Node* nodeParent, double cost, double heading, locomotionMode locMode)
 {
   node->cost = cost;
@@ -109,6 +58,8 @@ Node* PathPlanning::getNode(uint x, uint y)
         return NULL;
 }
 
+
+//__CALCULATION_OF_GRADIENT_FIELD
 
 void PathPlanning::calculateFieldGradient(std::vector< std::vector<double> > field,
                                           std::vector< std::vector<double> >& fieldGx,
@@ -175,7 +126,7 @@ void PathPlanning::calculateFieldGradient(std::vector< std::vector<double> > fie
 }
 
 
-//__GRADIENT DESCENT METHOD__\\
+//__GRADIENT DESCENT METHOD__
 
 std::vector<base::Waypoint> PathPlanning::gradientDescentTrajectory(base::Waypoint wStart, base::Waypoint wGoal, std::vector< std::vector<double> > field, double tau)
 {
@@ -184,14 +135,14 @@ std::vector<base::Waypoint> PathPlanning::gradientDescentTrajectory(base::Waypoi
     trajectory.insert(trajectory.begin(), wGoal);
     base::Waypoint wNew;
     calculateFieldGradient(propagationMatrix, propagationGXMatrix, propagationGYMatrix);
-    interpolateWaypoint(wGoal.position[0], wGoal.position[1], dCostX, dCostY, newL);
+    interpolateWaypoint(wGoal.position[0], wGoal.position[1], dCostX, dCostY);
     while(sqrt(pow((trajectory.front().position[0] - wStart.position[0]),2) +
-             pow((trajectory.front().position[1] - wStart.position[1]),2)) > 1.5)//Fix 1.5 value
+             pow((trajectory.front().position[1] - wStart.position[1]),2)) > (2*tau))
     {
         newX = trajectory.front().position[0] - tau*dCostX;
         newY = trajectory.front().position[1] - tau*dCostY;
         wNew.heading = atan2(dCostY,dCostX);
-        interpolateWaypoint(newX, newY, dCostX, dCostY, newL);
+        interpolateWaypoint(newX, newY, dCostX, dCostY);
         wNew.position = Eigen::Vector3d(newX,newY,newL);
         trajectory.insert(trajectory.begin(),wNew);
     }
@@ -199,9 +150,12 @@ std::vector<base::Waypoint> PathPlanning::gradientDescentTrajectory(base::Waypoi
     return trajectory;
 }
 
+
+//__PROPAGATION_FUNCTION_USING_EIKONAL_EQUATION__
+
 void PathPlanning::propagationFunction(Node* nodeTarget, std::vector<Node*>& narrowBand)
 {
-    double Tx,Ty,Delta,P,W,D=0;
+    double Tx,Ty,P,W;
     locomotionMode L;
     if(((nodeTarget->nb4List[0] != NULL))&&((nodeTarget->nb4List[2] != NULL)))
         Ty = !(getPropagation(nodeTarget->nb4List[2]) < getPropagation(nodeTarget->nb4List[0]))?getPropagation(nodeTarget->nb4List[0]):getPropagation(nodeTarget->nb4List[2]);
@@ -220,41 +174,44 @@ void PathPlanning::propagationFunction(Node* nodeTarget, std::vector<Node*>& nar
     L = nodeTarget->nodeLocMode;
     P = costFunction(nodeTarget);
 
-  if ((fabs(Tx-Ty)<P)&&(Tx < INF)&&(Ty < INF)){
-    W = (Tx+Ty+sqrt(2*pow(P,2.0) - pow((Tx-Ty),2.0)))/2;
-  }else{
-    W = (!(Tx<Ty)?Ty:Tx) + P;
-  }
+    if ((fabs(Tx-Ty)<P)&&(Tx < INF)&&(Ty < INF)){
+        W = (Tx+Ty+sqrt(2*pow(P,2.0) - pow((Tx-Ty),2.0)))/2;
+    }else{
+        W = (!(Tx<Ty)?Ty:Tx) + P;
+    }
 
-  if (nodeTarget->state == NARROW)
-    if(W < getPropagation(nodeTarget)){
+    if (nodeTarget->state == NARROW)
+        if(W < getPropagation(nodeTarget))
+        {
             setPropagation(nodeTarget,W);
             nodeTarget->nodeLocMode = L;
 	    nodeTarget->power = P;
+        }
+
+    if (nodeTarget->state == OPEN)
+    {
+        nodeTarget->state = NARROW;
+        setPropagation(nodeTarget,W);
+        nodeTarget->nodeLocMode = L;
+        nodeTarget->power = P;
+        narrowBand.push_back(nodeTarget);
     }
-  if (nodeTarget->state == OPEN){
-    nodeTarget->state = NARROW;
-    setPropagation(nodeTarget,W);
-    nodeTarget->nodeLocMode = L;
-    nodeTarget->power = P;
-    narrowBand.push_back(nodeTarget);
-  }
-  //std::cout << "Node Target is (" << nodeTarget->x << "," << nodeTarget->y << ")" << "with W = " << getPropagation(nodeTarget) << '\n';
 }
+
+
+//__FAST_MARCHING_ALGORITHM__
 
 std::vector<base::Waypoint> PathPlanning::fastMarching(base::Waypoint wStart, base::Waypoint wGoal)
 {
+
+  // Setting Start Node
     Node * nodeTarget = getNode(wStart.position[0], wStart.position[1]);
-    if (nodeTarget == NULL)
-    {
-        std::cout << "Bad Start, exiting" << '\n';
-        //break; FIX
-    }
-    std::cout << "Starting Node placed at (" << nodeTarget->x << "," << nodeTarget->y << ")" << '\n';
-    //if ((wGoal.position[0] >= nodeMatrix.size())||(wGoal.position[1] >= nodeMatrix.size())) fIX THIS
+
+  // Initializing the Narrow Band
     std::vector<Node*> narrowBand;
     narrowBand.push_back(nodeTarget);
 
+  // Initializing the Propagation Matrix
     propagationMatrix.resize(nodeMatrix.size());    
     for (uint j = 0; j < propagationMatrix.size(); j++)
         propagationMatrix[j].resize(nodeMatrix[j].size());
@@ -262,15 +219,12 @@ std::vector<base::Waypoint> PathPlanning::fastMarching(base::Waypoint wStart, ba
     for (uint j = 0; j < propagationMatrix.size(); j++)
         for (uint i = 0; i < propagationMatrix[j].size(); i++)
             propagationMatrix[j][i] = INF;
-
-    std::cout << "Propagation Matrix with size " << propagationMatrix[0].size() << "x" << propagationMatrix.size() << '\n';
-
     setPropagation(nodeTarget,0);
 
+  // Propagation Loop
     while (narrowBand.size() > 0)
     {
         nodeTarget = minCostNode(narrowBand);
-        //std::cout << "Node Target is (" << nodeTarget->x << "," << nodeTarget->y << ")" << '\n';
         nodeTarget->state = FROZEN;
         for (uint i = 0; i<4; i++)
             if ((nodeTarget->nb4List[i] != NULL) &&
@@ -279,16 +233,6 @@ std::vector<base::Waypoint> PathPlanning::fastMarching(base::Waypoint wStart, ba
                 (nodeTarget->nb4List[i]->state != OBSTACLE))
                 propagationFunction(nodeTarget->nb4List[i], narrowBand);
     }
-    /*std::cout << "Propagation Matrix created, showing result: " << '\n';
-    for (uint j = 0; j < propagationMatrix.size(); j++)
-    {
-        for (uint i = 0; i < propagationMatrix[j].size(); i++)
-        {
-            std::cout <<  propagationMatrix[j][i];
-            std::cout << ' ';
-        }
-    std::cout << '\n';
-    }*/
     return gradientDescentTrajectory(wStart, wGoal, propagationMatrix, 0.8);
 }
 
@@ -296,7 +240,7 @@ double PathPlanning::costFunction(Node* nodeTarget){
 
     double mu = nodeTarget->soil.friction;
     double s = nodeTarget->soil.slip;
-    double ri = nodeTarget->risk;
+    double ri = nodeTarget->risk.obstacle;
     double m = 20.0;
     double g = 3.711;
     double r = 0.07;
@@ -329,24 +273,23 @@ Node* PathPlanning::minCostNode(std::vector<Node*>& nodeList)
 
 double PathPlanning::getPropagation(Node* nodeTarget)
 {
-    return propagationMatrix[nodeTarget->y][nodeTarget->x];
+    return propagationMatrix[(uint)(nodeTarget->pose.position[1])][(uint)(nodeTarget->pose.position[0])];
 }
 
 void PathPlanning::setPropagation(Node* nodeTarget, double value)
 {
-    propagationMatrix[nodeTarget->y][nodeTarget->x] = value;
+    propagationMatrix[(uint)(nodeTarget->pose.position[1])][(uint)(nodeTarget->pose.position[0])] = value;
 }
 
-void PathPlanning::interpolateWaypoint(double x, double y, double& dCostX, double& dCostY, double& L)
+
+//__INTERPOLATION_ON_WAYPOINT__
+
+void PathPlanning::interpolateWaypoint(double x, double y, double& dCostX, double& dCostY)
 {
-  uint i = (uint)x;
-  uint j = (uint)y;
-  double a = x - (double)i;
-  double b = y - (double)j;
-  Node* node00 = getNode(i,j);
-  Node* node10 = getNode(i+1,j);
-  Node* node01 = getNode(i,j+1);
-  Node* node11 = getNode(i+1,j+1);
+    uint i = (uint)x;
+    uint j = (uint)y;
+    double a = x - (double)i;
+    double b = y - (double)j;
 
     double gx00 = propagationGXMatrix[j][i];
     double gx10 = propagationGXMatrix[j][i+1];
@@ -358,24 +301,6 @@ void PathPlanning::interpolateWaypoint(double x, double y, double& dCostX, doubl
     double gy01 = propagationGYMatrix[j+1][i];
     double gy11 = propagationGYMatrix[j+1][i+1];
 
-  dCostX = gx00 +
-                       (gx10 - gx00)*a +
-                       (gx01 - gx00)*b +
-                       (gx11 + gx00 - gx10 - gx01)*a*b;
-  dCostY = gy00 +
-                       (gy10 - gy00)*a +
-                       (gy10 - gy00)*b +
-                       (gy11 + gy00 - gy10 - gy01)*a*b;
-  L =                  (node00->nodeLocMode) +
-                       (node10->nodeLocMode - node00->nodeLocMode)*a +
-                       (node01->nodeLocMode - node00->nodeLocMode)*b +
-                       (node11->nodeLocMode + node00->nodeLocMode - node10->nodeLocMode - node01->nodeLocMode)*a*b;
-  if (L<0.5)
-    L = 0.0;
-  else
-    L = 1.0;
-
-  //x(nuevo) = x(anterior) - tau * interpolatePoint(x(anterior), y(anterior), );
-  //cost(nuevo) = interpolatePoint(gamma(end,:),cost);
-  //height(nuevo) = interpolatePoint(gamma(end,:),heightMap);
+    dCostX = gx00 + (gx10 - gx00)*a + (gx01 - gx00)*b + (gx11 + gx00 - gx10 - gx01)*a*b;
+    dCostY = gy00 + (gy10 - gy00)*a + (gy10 - gy00)*b + (gy11 + gy00 - gy10 - gy01)*a*b;
 }
