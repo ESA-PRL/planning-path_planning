@@ -140,7 +140,7 @@ namespace PathPlanning_lib
     void calculatePitchRoll(double slope, double aspect, double yaw, double &roll, double &pitch);
             void propagationFunction(Node* nodeTarget, std::vector<Node*>& narrowBand);
             Node* minCostNode(std::vector<Node*>& nodeList);
-            void interpolateWaypoint(double x, double y, double& dCostX, double& dCostY);
+            void interpolateWaypoint(double x, double y, double& dCostX, double& dCostY, double& height);
     };
 
 } // end namespace motion_planning_libraries

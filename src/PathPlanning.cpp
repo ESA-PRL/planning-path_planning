@@ -22,7 +22,7 @@ void PathPlanning::initNodeMatrix(std::vector< std::vector<double> > elevation, 
 
   for (uint j = 0; j < elevation[0].size(); j++){
     for (uint i = 0; i < elevation.size(); i++)
-      nodeRow.push_back(new Node(i, j, elevation[i][j], friction[i][j], slip[i][j], risk[i][j]));
+      nodeRow.push_back(new Node(i, j, elevation[j][i], friction[j][i], slip[j][i], risk[j][i]));
     nodeMatrix.push_back(nodeRow);
     nodeRow.clear();
   }
@@ -130,22 +130,26 @@ void PathPlanning::calculateFieldGradient(std::vector< std::vector<double> > fie
 
 std::vector<base::Waypoint> PathPlanning::gradientDescentTrajectory(base::Waypoint wStart, base::Waypoint wGoal, std::vector< std::vector<double> > field, double tau)
 {
-    double newX, newY, newL, dCostX, dCostY;
+    double newX, newY, newL, newH, dCostX, dCostY;
     std::vector<base::Waypoint> trajectory;
-    trajectory.insert(trajectory.begin(), wGoal);
+    
     base::Waypoint wNew;
     calculateFieldGradient(propagationMatrix, propagationGXMatrix, propagationGYMatrix);
-    interpolateWaypoint(wGoal.position[0], wGoal.position[1], dCostX, dCostY);
+    interpolateWaypoint(wGoal.position[0], wGoal.position[1], dCostX, dCostY, newH);
+    wGoal.position[2] = newH;
+    trajectory.insert(trajectory.begin(), wGoal);
     while(sqrt(pow((trajectory.front().position[0] - wStart.position[0]),2) +
              pow((trajectory.front().position[1] - wStart.position[1]),2)) > (2*tau))
     {
         newX = trajectory.front().position[0] - tau*dCostX;
         newY = trajectory.front().position[1] - tau*dCostY;
         wNew.heading = atan2(dCostY,dCostX);
-        interpolateWaypoint(newX, newY, dCostX, dCostY);
-        wNew.position = Eigen::Vector3d(newX,newY,newL);
+        interpolateWaypoint(newX, newY, dCostX, dCostY, newH);
+        wNew.position = Eigen::Vector3d(newX,newY,newH);
         trajectory.insert(trajectory.begin(),wNew);
     }
+    interpolateWaypoint(wStart.position[0], wStart.position[1], dCostX, dCostY, newH);
+    wStart.position[2] = newH;
     trajectory.insert(trajectory.begin(), wStart);
     return trajectory;
 }
@@ -284,7 +288,7 @@ void PathPlanning::setPropagation(Node* nodeTarget, double value)
 
 //__INTERPOLATION_ON_WAYPOINT__
 
-void PathPlanning::interpolateWaypoint(double x, double y, double& dCostX, double& dCostY)
+void PathPlanning::interpolateWaypoint(double x, double y, double& dCostX, double& dCostY, double& height)
 {
     uint i = (uint)x;
     uint j = (uint)y;
@@ -301,6 +305,12 @@ void PathPlanning::interpolateWaypoint(double x, double y, double& dCostX, doubl
     double gy01 = propagationGYMatrix[j+1][i];
     double gy11 = propagationGYMatrix[j+1][i+1];
 
+    double h00 = nodeMatrix[j][i]->soil.elevation;
+    double h10 = nodeMatrix[j][i+1]->soil.elevation;
+    double h01 = nodeMatrix[j+1][i]->soil.elevation;
+    double h11 = nodeMatrix[j+1][i+1]->soil.elevation;
+
     dCostX = gx00 + (gx10 - gx00)*a + (gx01 - gx00)*b + (gx11 + gx00 - gx10 - gx01)*a*b;
     dCostY = gy00 + (gy10 - gy00)*a + (gy10 - gy00)*b + (gy11 + gy00 - gy10 - gy01)*a*b;
+    height = h00 + (h10 - h00)*a + (h10 - h00)*b + (h11 + h00 - h10 - h01)*a*b;
 }
