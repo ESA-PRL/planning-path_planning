@@ -3,6 +3,6 @@ rock_library(path_planning
     HEADERS PathPlanning.hpp
     DEPS_PKGCONFIG base-types)
 
-rock_executable(PathPlanningTest PathPlanningTest.cpp
-    DEPS path_planning)
+#rock_executable(PathPlanningTest PathPlanningTest.cpp
+#   DEPS path_planning)
 
