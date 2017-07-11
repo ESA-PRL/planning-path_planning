@@ -20,7 +20,7 @@ namespace PathPlanning_lib
     };
 
     enum nodeInterpType
-    {//Must be external
+    {
         NON_INTERPOLATED,
         VERTICAL,
         HORIZONTAL
@@ -35,11 +35,11 @@ namespace PathPlanning_lib
 
     enum nodeState
     {
-        OPEN,
+        FAR,
         CLOSED,
         NARROW,
-        FROZEN,
-	OBSTACLE
+	      OBSTACLE,
+        HIDDEN
     };
 
     struct riskProperties
@@ -58,7 +58,6 @@ namespace PathPlanning_lib
 
     struct Node {
       //Node Parameters
-        uint index[2]; // Position in nodemap
         base::Pose2D pose; // X-Y-aspect
         double slope;
 	double elevation;
@@ -97,7 +96,7 @@ namespace PathPlanning_lib
     Node()
     {
         cost = INF;
-        state = OPEN;
+        state = FAR;
         nodeParent = NULL;
     }
 
@@ -111,26 +110,38 @@ namespace PathPlanning_lib
         risk.obstacle = r_;
         work = INF;
         rhs = 0;
-        g = std::numeric_limits<double>::max();
-        key[0] = std::numeric_limits<double>::max();
-        key[1] = std::numeric_limits<double>::max();
-        state = OPEN;
-        //closed = (risk>0.7); // Close if NOT traversable
+        g = INF;
+        key[0] = INF;
+        key[1] = INF;
+        state = FAR;
         nodeParent = NULL;
     }
     };
 
-    struct NodeMap
+    class NodeMap
     {
-        double nodeSize;
-        base::Pose2D globalOriginPose;
-        std::vector< std::vector<Node*> > nodeMatrix;
-        Node* getNode(uint i, uint j);
+        public:
+            double nodeWidth;
+            base::Pose2D globalOriginPose;
+            std::vector< std::vector<Node*> > nodeMatrix;
+            base::Waypoint actualPose;
+            base::Waypoint goalPose;
+            Node * nodeActualPos;
+            Node * nodeGoal;
+            Node * getNode(uint i, uint j);
 
-        NodeMap(double size, base::Pose2D pos,
-                std::vector< std::vector<double> > elevation,
-		std::vector< std::vector<double> > cost,
-		std::vector< std::vector<double> > risk);
+            void setActualPos(base::Waypoint wPos);
+
+            void setGoal(base::Waypoint wGoal);
+
+            Node * getActualPos();
+
+            Node * getGoal();
+
+            NodeMap(double size, base::Pose2D pos,
+                    std::vector< std::vector<double> > elevation,
+		                std::vector< std::vector<double> > cost,
+		                std::vector< std::vector<double> > risk);
     };
 
 //__PATH_PLANNER_CLASS__
@@ -139,10 +150,6 @@ namespace PathPlanning_lib
         private:
             base::samples::RigidBodyState mStartPose;
             double pathCost;
-
-            std::vector< std::vector<double> > propagationMatrix;
-            std::vector< std::vector<double> > propagationGXMatrix;
-            std::vector< std::vector<double> > propagationGYMatrix;
             base::Time t1;
         public:
             PathPlanning();
@@ -152,7 +159,7 @@ namespace PathPlanning_lib
 	    std::vector< std::vector<double*> > riskMap;
 	    std::vector< soilType* > terrainList;
 
-	    void initTerrainList(std::vector< double > friction, std::vector< double > slip);
+	    void initTerrainList(std::vector< std::vector<double> > soils);
 	    void costFunction(uint Terrain, double& Power, locomotionMode& lM);
 
             // Field D Star Functions
@@ -163,24 +170,26 @@ namespace PathPlanning_lib
             void computeCost(Node * nodeTarget, double& di, double& dj, double& cost);
             double getHeuristic(Node * nodeTarget, base::Waypoint wStart);
             void costInterpolation(double g1, double g2, uint cTerrain, uint bTerrain, double di, double dj, double& dk, double& vs);
+            void getPath(Node * nodeStart, base::Waypoint wGoal,
+	     NodeMap nodes, double tau,
+ 	     std::vector<base::Waypoint>& trajectory, std::vector< short int >& locVector);
 
-    bool setGoal(double x, double y);
+    //bool setGoal(double x, double y);
     void showStart();
     //Node* getNode(double x, double y);
     void showNodeMatrix();
             void fastMarching(base::Waypoint wStart, base::Waypoint wGoal, std::vector<base::Waypoint>& trajectory, std::vector< short int >& locVector, NodeMap * nodes);
             void calculateFieldGradient();
             void gradientNode(Node* nodeTarget, double& dx, double& dy);
-            void gradientDescentTrajectory(base::Waypoint wStart, base::Waypoint wGoal,
-					     NodeMap * nodes, double tau,
- 					     std::vector<base::Waypoint>& trajectory, std::vector< short int >& locVector);
+            void gradientDescentTrajectory(NodeMap * nodes, double tau,
+ 					                     std::vector<base::Waypoint>& trajectory,
+                               std::vector< short int >& locVector);
 
     void heuristicCostFunction(Node* start, Node* goal);
     void calculatePitchRoll(double slope, double aspect, double yaw, double &roll, double &pitch);
             void propagationFunction(Node* nodeTarget, std::vector<Node*>& narrowBand);
             Node* minCostNode(std::vector<Node*>& nodeList);
             void interpolateWaypoint(double x, double y, double& dCostX, double& dCostY, double& height, short int& locMode, NodeMap * nodes);
-            void showPropagationMatrix();
     };
 
 } // end namespace motion_planning_libraries
