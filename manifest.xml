@@ -15,4 +15,7 @@
   <depend package="dummy-dependency-n" />
   -->
   <depend package="base/types" />
+  <depend package="base/orogen/types"/>
+  <depend package="orogen"/>
+  <depend package="slam/orogen/envire" />
 </package>

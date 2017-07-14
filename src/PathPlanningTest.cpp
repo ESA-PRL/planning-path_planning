@@ -54,6 +54,44 @@ std::vector< std::vector<double> > readMatrixFile(std::string map_file, double& 
     return mapMatrix;
 }
 
+std::vector< std::vector<double> > readTerrainFile(std::string terrain_file)
+{
+    std::cout<< "Map being loaded from: " << terrain_file << ", correct?" << std::endl;
+    std::vector< std::vector<double> > terrainList;
+    std::string line;
+    std::ifstream eFile(terrain_file.c_str(), std::ios::in);
+    uint numTerrains = 0, numProperties = 0;
+    std::vector <double> row;
+
+    if( eFile.is_open() )
+    {
+        while ( std::getline(eFile, line) ){
+            std::stringstream ss(line);
+            std::string cell;
+            numProperties = 0;
+            while( std::getline(ss, cell, ' ') ){
+                double val;
+                std::stringstream numericValue(cell);
+                numericValue >> val;
+                row.push_back(val);
+                numProperties++;
+            }
+            terrainList.push_back(row);
+            row.clear();
+            numTerrains++;
+        }
+        eFile.close();
+        std::cout << "Terrains detected: " << numTerrains << std::endl;
+        std::cout << "Properties detected: " << numProperties << std::endl;
+    }
+    else
+    {
+        std::cout << "Problem opening the file" << std::endl;
+        return terrainList;
+    }
+    return terrainList;
+}
+
 // Main code:
 int main(int argc,char* argv[])
 {
@@ -64,10 +102,10 @@ int main(int argc,char* argv[])
 
   double Nraw, Ncol;
 
-  std::vector< std::vector<double> > elevationMatrix = readMatrixFile("../terrainData/crater/elevation_map.txt", Nraw, Ncol);
-  std::vector< std::vector<double> > frictionMatrix = readMatrixFile("../terrainData/crater/crater_costMap.txt", Nraw, Ncol);
-  std::vector< std::vector<double> > slipMatrix = readMatrixFile("../terrainData/crater/slip_map.txt", Nraw, Ncol);
-  std::vector< std::vector<double> > riskMatrix = readMatrixFile("../terrainData/crater/risk_map.txt", Nraw, Ncol);
+  std::vector< std::vector<double> > elevationMatrix = readMatrixFile("../../terrainData/prl/prl_elevationMap.txt", Nraw, Ncol);
+  std::vector< std::vector<double> > costMatrix = readMatrixFile("../../terrainData/prl/prl_costMap.txt", Nraw, Ncol);
+  std::vector< std::vector<double> > riskMatrix = readMatrixFile("../../terrainData/prl/prl_riskMap.txt", Nraw, Ncol);
+  std::vector< std::vector<double> > soilList = readTerrainFile("../../terrainData/prl/soilList.txt");
 
   // IMPORTING DATA PROCESS - end
 
@@ -83,17 +121,29 @@ int main(int argc,char* argv[])
   printf("Waiting for poses \n");
 
     std::vector<base::Waypoint> trajectory;
+    std::vector<short int> locVector;
     base::Waypoint wRover;
-    wRover.position[0] = 60.0;
-    wRover.position[1] = 20.0;
-    wRover.heading = 90.0*M_PI/180.0;
+    wRover.position[0] = 1.5;
+    wRover.position[1] = 8.0;
+    wRover.heading = -90.0*M_PI/180.0;
     base::Waypoint wGoal;
-    wGoal.position[0] = 10.0;
-    wGoal.position[1] = 10.0;
-    wGoal.heading = 90.0*M_PI/180.0;
+    wGoal.position[0] = 8;
+    wGoal.position[1] = 5.5;
+    wGoal.heading = 0.0*M_PI/180.0;
 
-    aresPlanner.initNodeMatrix(elevationMatrix, frictionMatrix, slipMatrix, riskMatrix);
-    trajectory = aresPlanner.fastMarching(wRover,wGoal);
+    double size = 0.05;
+    base::Pose2D pos;
+    pos.position[0] = 0.0;
+    pos.position[1] = 0.0;
+    printf("Creating Map \n");
+
+    PathPlanning_lib::NodeMap* map = new PathPlanning_lib::NodeMap(size, pos, elevationMatrix, costMatrix, riskMatrix);
+
+    printf("Map created \n");
+
+    trajectory.clear();
+    aresPlanner.fastMarching(wRover,wGoal,trajectory,locVector, map);
+
     std::cout<< "Trajectory has " << trajectory.size() << " Waypoints" << std::endl;
     for (unsigned int i = 0; i<trajectory.size(); i++)
 	std::cout << "Waypoint " << i << " -> Pos: (" << trajectory[i].position[0] << "," << trajectory[i].position[1] << ") Loc: " << trajectory[i].position[2] 
