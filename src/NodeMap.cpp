@@ -13,8 +13,8 @@ NodeMap::NodeMap()
 
 NodeMap::NodeMap(envire::TraversabilityGrid* travGrid)
 {
-    t1 = base::Time::now();
     printf("Creating NodeMap from envire data\n");
+    t1 = base::Time::now();
     scale = travGrid->getScaleX();
     std::vector<Node*> nodeRow;
     uint klass;
@@ -30,7 +30,7 @@ NodeMap::NodeMap(envire::TraversabilityGrid* travGrid)
                     nodeRow.back()->state = HIDDEN;
                     break;
                 case 1: //Obstacle node
-                    nodeRow.back()->state = OBSTACLE;
+                    //nodeRow.back()->state = OBSTACLE;
                     break;
                 default:
                     break;
@@ -45,6 +45,35 @@ NodeMap::NodeMap(envire::TraversabilityGrid* travGrid)
     std::cout<<"Neighbourhood made in " << (base::Time::now()-t1) << " s" << std::endl;
 }
 
+void NodeMap::createLocalNodeMap(envire::TraversabilityGrid* travGrid)
+{
+    double globalNodePosX, globalNodePosY;
+    uint klass;
+    for (uint j = 0; j < travGrid->getCellSizeY(); j++)
+    {
+        for (uint i = 0; i < travGrid->getCellSizeX(); i++)
+        {
+            klass = travGrid->getGridData()[j][i];
+            if(klass != 0) //Node not hidden
+            {
+                // Check in which global cell is
+                // Here Im not taking into account relative translation and rotation between maps!!
+                globalNodePosX = ((double)i) * travGrid->getScaleX()/this->scale;
+                globalNodePosY = ((double)j) * travGrid->getScaleY()/this->scale;
+                /*std::cout<<" Hi, Im local node (" << i << "," <<
+                           j << ") at global node (" << (uint)globalNodePosX << "," << (uint)globalNodePosY << ")" << std::endl;*/
+                if(this->nodeMatrix[(uint)globalNodePosY][(uint)globalNodePosX]->localNodeMatrix == NULL)
+                {
+                    this->nodeMatrix[(uint)globalNodePosY][(uint)globalNodePosX]->localNodeMatrix = new std::vector< std::vector<Node*> >;
+                    std::cout<<" Hi, Im local node (" << i << "," <<
+                               j << ") at global node (" << (uint)globalNodePosX << "," << (uint)globalNodePosY << ")" << std::endl;
+                }
+            }
+
+        }
+    }
+}
+
 NodeMap::NodeMap(double size, base::Pose2D pos,
                 std::vector< std::vector<double> > elevation,
 		std::vector< std::vector<double> > cost,
@@ -53,7 +82,7 @@ NodeMap::NodeMap(double size, base::Pose2D pos,
     t1 = base::Time::now();
     printf("Creating NodeMap\n");
     scale = size;
-    globalOriginPose = pos;
+    globalOffset = pos;
     std::vector<Node*> nodeRow;
     for (uint j = 0; j < elevation[0].size(); j++)
     {
@@ -93,6 +122,7 @@ void NodeMap::makeNeighbourhood()
           nodeMatrix[j][i]->nb4List.push_back(getNode(i+1,j));
           nodeMatrix[j][i]->nb4List.push_back(getNode(i,j+1));
 
+
   //                 8 - Neighbourhood
   //       nb4List[3] __ nb4List[2] __ nb4List[1]
   //       (i-1, j+1) __  (i, j+1)  __ (i+1, j+1)
@@ -115,13 +145,47 @@ void NodeMap::makeNeighbourhood()
   }
 }
 
+void NodeMap::updateNodeMap(envire::TraversabilityGrid* travGrid)
+{
+    t1 = base::Time::now();
+    printf("Updating NodeMap\n");
+    uint klass;
+    uint counter = 0;
+    uint sizeY = travGrid->getCellSizeY();
+    uint sizeX = travGrid->getCellSizeX();
+    for (uint j = 0; j < sizeY; j++)
+    {
+        for (uint i = 0; i < sizeX; i++)
+        {
+            //klass = travGrid->getGridData()[j][i];
+            /*switch(klass)
+            {
+                case 0: //Unknown node
+                    nodeMatrix[j][i]->state = HIDDEN;
+                    break;
+                case 1: //Obstacle node
+                    nodeMatrix[j][i]->state = OBSTACLE;
+                    counter++;
+                    break;
+                default:
+                    nodeMatrix[j][i]->state = FAR;
+                    counter++;
+                    break;
+            }*/
+        }
+    }
+    std::cout<<"NodeMap updated in " << (base::Time::now()-t1) << " s" << std::endl;
+    std::cout<< 100*counter/(travGrid->getCellSizeY()*travGrid->getCellSizeX()) << "% of map is visible " << std::endl;
+}
+
 void NodeMap::resetPropagation()
 {
     for (uint j = 0; j < nodeMatrix[0].size(); j++)
     {
         for (uint i = 0; i < nodeMatrix.size(); i++)
         {
-            nodeMatrix[j][i]->state = FAR;
+            if (nodeMatrix[j][i]->state == CLOSED)
+                nodeMatrix[j][i]->state = OPEN;
             nodeMatrix[j][i]->work = INF;
         }
     }
@@ -168,8 +232,160 @@ Node* NodeMap::getNode(uint i, uint j)
 {
     if ((i >= nodeMatrix[0].size())||(j >= nodeMatrix.size()))
         return NULL;
-    if (nodeMatrix[j][i]->state != OBSTACLE)
-        return nodeMatrix[j][i];
-    else
-        return NULL;
+    return nodeMatrix[j][i];
+}
+
+
+// Simulation function
+void NodeMap::hidAll()
+{
+    for (uint j = 0; j < nodeMatrix[0].size(); j++)
+        for (uint i = 0; i < nodeMatrix.size(); i++)
+            nodeMatrix[j][i]->state = HIDDEN;
+    std::cout << "All nodes are hidden" << std::endl;
+}
+
+
+// Simulation function
+bool NodeMap::updateVisibility(base::Waypoint wPos)
+{
+    t1 = base::Time::now();
+    double rx,ry,x,y,counter = 0;
+    bool flag = false;
+    std::cout << "PLANNER: updating visibility" << std::endl;
+    for (uint j = 0; j < nodeMatrix[0].size(); j++)
+    {
+        for (uint i = 0; i < nodeMatrix.size(); i++)
+        {
+            if(nodeMatrix[j][i]->state != HIDDEN)
+            {
+                if ((((nodeMatrix[j][i]->nb4List[1] != NULL) &&
+                          (nodeMatrix[j][i]->nb4List[2] != NULL)) &&
+                         ((nodeMatrix[j][i]->nb4List[1]->terrain == 0) &&
+                          (nodeMatrix[j][i]->nb4List[2]->terrain == 0))) ||
+                        ((nodeMatrix[j][i]->nb4List[0] != NULL) &&
+                          (nodeMatrix[j][i]->nb4List[3] != NULL)) &&
+                        ((nodeMatrix[j][i]->nb4List[0]->terrain == 0) &&
+                          (nodeMatrix[j][i]->nb4List[3]->terrain == 0)))
+                {
+                  // Obstacle nodes are too close
+                   if (nodeMatrix[j][i]->terrain != 0)
+                   {
+                     nodeMatrix[j][i]->terrain = 0;
+                   }
+                }
+                else if (nodeMatrix[j][i]->state == CLOSED)
+                {
+                  // Just making traversable nodes OPEN again
+                    nodeMatrix[j][i]->state = OPEN;
+                }
+                counter++;
+            }
+            else
+            {
+                rx = i*scale + globalOffset.position[0];
+                ry = j*scale + globalOffset.position[1];
+                x = wPos.position[0] + 0.4*cos(wPos.heading);
+                y = wPos.position[1] + 0.4*sin(wPos.heading);
+                if ((sqrt(pow(rx-x,2) +
+                             pow(ry-y,2)) < 1)&&(nodeMatrix[j][i]->state == HIDDEN))
+                {
+                    flag = true;
+                    nodeMatrix[j][i]->state = OPEN;
+                    if (nodeMatrix[j][i]->terrain == 0)
+                        expandRisk(nodeMatrix[j][i]);
+                    counter++;
+                }
+            }
+        }
+    }
+
+    // Conservative method to avoid passing through corridors of length 1 node
+
+    /*if ((nodeTarget->nb4List[1] != NULL)&&(nodeTarget->nb4List[2] != NULL)&&
+        (nodeTarget->nb4List[1]->state == OBSTACLE)&&
+         (nodeTarget->nb4List[2]->state == OBSTACLE))
+        nodeTarget->state = OBSTACLE;*/
+
+    if(flag == true)
+    {
+        std::cout << "Visibility is updated in " << (base::Time::now()-t1) << " s" << std::endl;
+        std::cout<< 100*counter/(nodeMatrix.size()*nodeMatrix[0].size()) << "% of map is visible " << std::endl;
+    }
+}
+
+void NodeMap::expandRisk(Node * obstacleNode)
+{
+    std::vector<Node*> expandableNodes;
+    Node * nodeTarget;
+    //std::cout << "Expanding Risk of node (" << obstacleNode->pose.position[0] << "," << obstacleNode->pose.position[1] <<")"<< std::endl;
+    expandableNodes.push_back(obstacleNode);
+    for(uint k = 0; k<4; k++)
+    {
+        if (expandableNodes.size() == 0)
+            break;
+        for(int j = expandableNodes.size()-1; j>=0; j--)
+        {
+            //std::cout << "k = " << k << ", j = " << j << std::endl;
+            nodeTarget = expandableNodes[j];
+            expandableNodes.erase(expandableNodes.begin()+j);
+            for (uint i = 0; i<4; i++)
+                if ((nodeTarget->nb4List[i] != NULL) &&
+                    (1 - k*0.25 > nodeTarget->nb4List[i]->risk.obstacle))
+                {
+                    nodeTarget->nb4List[i]->risk.obstacle = 1 - k*0.25;
+                    expandableNodes.push_back(nodeTarget->nb4List[i]);
+                }
+        }
+    }
+
+}
+
+
+envire::ElevationGrid* NodeMap::getEnvirePropagation()
+{
+
+    envire::ElevationGrid* elevGrid = new envire::ElevationGrid(
+            nodeMatrix[0].size(), nodeMatrix.size(),
+            this->scale, this->scale);
+    for (uint j = 0; j < nodeMatrix[0].size(); j++)
+    {
+        for (uint i = 0; i < nodeMatrix.size(); i++)
+        {
+            if(nodeMatrix[j][i]->work != INF)
+                elevGrid->get((double)(i)*scale,(double)(j)*scale) = nodeMatrix[j][i]->work;
+            else
+                elevGrid->get((double)(i)*scale,(double)(j)*scale) = 0;
+        }
+    }
+    return elevGrid;
+}
+
+envire::TraversabilityGrid* NodeMap::getEnvireState()
+{
+    envire::TraversabilityGrid* travGrid = new envire::TraversabilityGrid(
+          nodeMatrix[0].size(), nodeMatrix.size(),
+          this->scale, this->scale);
+    travGrid->setTraversabilityClass(0, envire::TraversabilityClass(0.2));
+    travGrid->setTraversabilityClass(1, envire::TraversabilityClass(0.0));
+    for(uint i = 0; i < 10; i++)
+        travGrid->setTraversabilityClass(i+2, envire::TraversabilityClass(1-0.05*i));
+
+    for (uint j = 0; j < nodeMatrix[0].size(); j++)
+    {
+        for (uint i = 0; i < nodeMatrix.size(); i++)
+        {
+            travGrid->setProbability(1.0, i,j);
+            if (nodeMatrix[j][i]->state == HIDDEN)
+                travGrid->setTraversability(0,i,j);
+            else if (nodeMatrix[j][i]->terrain == 0)
+                travGrid->setTraversability(1, i,j);
+            else
+            {
+                travGrid->setTraversability(5 * (uint) nodeMatrix[j][i]->terrain - 3 + (uint)((1-nodeMatrix[j][i]->risk.obstacle)/0.25), i,j);
+            }
+        }
+    }
+    std::cout << "State Map is updated" << std::endl;
+    return travGrid;
 }

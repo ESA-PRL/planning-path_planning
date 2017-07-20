@@ -9,6 +9,7 @@
 #include <list>
 #include <envire/core/Environment.hpp>
 #include <envire/maps/TraversabilityGrid.hpp>
+#include <envire/maps/ElevationGrid.hpp>
 #include <envire/operators/SimpleTraversability.hpp>
 //#include <orocos/envire/Orocos.hpp>
 
@@ -44,10 +45,8 @@ namespace PathPlanning_lib
 
   enum nodeState
   {
-      FAR,
+      OPEN,
       CLOSED,
-      NARROW,
-      OBSTACLE,
       HIDDEN
   };
 
@@ -64,29 +63,30 @@ namespace PathPlanning_lib
 double friction;
 double slip;
   };
-  
-    struct Node {
-    //Node Parameters
-      base::Pose2D pose; // X-Y-aspect
-      double slope;
-double elevation;
-      riskProperties risk;
-nodeState state;
-      base::samples::RigidBodyState roverPose;
-      Node *nodeParent;
-      unsigned int terrain; //Index to terrainList
-      double g;
-      double rhs;
-      double key[2];
-      double power;
-      double work;
 
-double cost;
-double dCostX;
-double dCostY;
-double heuristicCost;//for A*
-      std::vector<Node*> nb8List; //8-neighbour nodes List
-      std::vector<Node*> nb4List; //4-Neighbourhood List
+    struct Node {
+      //Node Parameters
+        base::Pose2D pose; // X-Y-aspect
+        double slope;
+        double elevation;
+        riskProperties risk;
+        nodeState state;
+        base::samples::RigidBodyState roverPose;
+        Node *nodeParent;
+        unsigned int terrain; //Index to terrainList
+        double g;
+        double rhs;
+        double key[2];
+        double power;
+        double work;
+
+        double cost;
+        double dCostX;
+        double dCostY;
+        double heuristicCost;//for A*
+        std::vector<Node*> nb8List; //8-neighbour nodes List
+        std::vector<Node*> nb4List; //4-Neighbourhood List
+        std::vector< std::vector<Node*> >* localNodeMatrix;
 
 double distanceCost;
 double headingCost;
@@ -105,7 +105,7 @@ double aspect;
       Node()
       {
           cost = INF;
-          state = FAR;
+          state = OPEN;
           nodeParent = NULL;
       }
 
@@ -116,14 +116,16 @@ double aspect;
         // Calculate slope and aspect
           terrain = (unsigned int) c_;
           elevation = e_;
-          risk.obstacle = r_;
+          //risk.obstacle = r_;
+          risk.obstacle = 0;
           work = INF;
           rhs = 0;
           g = INF;
           key[0] = INF;
           key[1] = INF;
-          state = FAR;
+          state = OPEN;
           nodeParent = NULL;
+          localNodeMatrix = NULL;
       }
   };
 
@@ -132,7 +134,7 @@ double aspect;
       public:
           double scale;
           base::Time t1;
-          base::Pose2D globalOriginPose;
+          base::Pose2D globalOffset;
           std::vector< std::vector<Node*> > nodeMatrix;
           base::Waypoint actualPose;
           base::Waypoint goalPose;
@@ -150,7 +152,14 @@ double aspect;
                   std::vector< std::vector<double> > cost,
                   std::vector< std::vector<double> > risk);
           void resetPropagation();
+          void updateNodeMap(envire::TraversabilityGrid* travGrid);
           void makeNeighbourhood();
+          void createLocalNodeMap(envire::TraversabilityGrid* travGrid);
+          void hidAll();
+          bool updateVisibility(base::Waypoint wPos);
+          envire::ElevationGrid* getEnvirePropagation();
+          envire::TraversabilityGrid* getEnvireState();
+          void expandRisk(Node * obstacleNode);
   };
 } // end namespace motion_planning_libraries_nodemap
 

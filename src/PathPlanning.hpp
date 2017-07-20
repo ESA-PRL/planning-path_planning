@@ -49,9 +49,10 @@ namespace PathPlanning_lib
                             std::vector<base::Waypoint>& trajectory,
                             std::vector< short int >& locVector,
                             NodeMap * nodes);
-            void getPath(Node * nodeStart, base::Waypoint wGoal, NodeMap nodes,
-                         double tau, std::vector<base::Waypoint>& trajectory,
-                         std::vector< short int >& locVector);
+            void getInterpolatedPath(Node * nodeStart, base::Waypoint wGoal,
+                                     NodeMap nodes, double tau,
+                                     std::vector<base::Waypoint>& trajectory,
+                                     std::vector< short int >& locVector);
             void setKey(Node * nodeTarget, base::Waypoint wStart);
             double getHeuristic(Node * nodeTarget, base::Waypoint wStart);
             Node * getMinorKey( Node * nodeA, Node * nodeB);
@@ -65,16 +66,16 @@ namespace PathPlanning_lib
 
           // Fast Marching Functions
             void fastMarching(base::Waypoint wStart, base::Waypoint wGoal,
-                              std::vector<base::Waypoint>& trajectory,
-                              std::vector< short int >& locVector,
                               NodeMap * nodes);
+            void initNarrowBand(NodeMap * nodes, base::Waypoint wGoal);
+            void getHorizonCost(NodeMap* nodes, Node* horizonNode, base::Waypoint wGoal);
             void propagationFunction(Node* nodeTarget, double scale);
-            void gradientDescentTrajectory(NodeMap * nodes, double tau,
+            void getPath(NodeMap * nodes, double tau,
  					                     std::vector<base::Waypoint>& trajectory,
                                std::vector< short int >& locVector);
             Node* minCostNode();
             void gradientNode(Node* nodeTarget, double& dx, double& dy);
-            void interpolateWaypoint(double x, double y, double& dCostX,
+            Node* calculateNextWaypoint(double x, double y, double& dCostX,
                                      double& dCostY, double& height,
                                      short int& locMode, NodeMap * nodes);
     };
