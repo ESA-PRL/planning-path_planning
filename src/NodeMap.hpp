@@ -66,7 +66,7 @@ double slip;
 
     struct Node {
       //Node Parameters
-        base::Pose2D pose; // X-Y-aspect
+        base::Pose2D pose; // X-Y-heading
         double slope;
         double elevation;
         riskProperties risk;
@@ -109,7 +109,7 @@ double aspect;
           nodeParent = NULL;
       }
 
-      Node(uint x_, uint y_, double e_, double c_, double r_)
+      Node(uint x_, uint y_, double e_, double c_)
       {
           pose.position[0] = (double)x_;
           pose.position[1] = (double)y_;
@@ -149,8 +149,7 @@ double aspect;
           NodeMap(envire::TraversabilityGrid* travGrid);
           NodeMap(double size, base::Pose2D pos,
                   std::vector< std::vector<double> > elevation,
-                  std::vector< std::vector<double> > cost,
-                  std::vector< std::vector<double> > risk);
+                  std::vector< std::vector<double> > cost);
           void resetPropagation();
           void updateNodeMap(envire::TraversabilityGrid* travGrid);
           void makeNeighbourhood();

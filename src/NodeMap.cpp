@@ -23,7 +23,7 @@ NodeMap::NodeMap(envire::TraversabilityGrid* travGrid)
         for (uint i = 0; i < travGrid->getCellSizeX(); i++)
         {
             klass = travGrid->getGridData()[j][i];
-            nodeRow.push_back(new Node(i, j, 0, klass==1?0:1, 0));
+            nodeRow.push_back(new Node(i, j, 0, klass==1?0:1));
             switch(klass)
             {
                 case 0: //Unknown node
@@ -76,19 +76,17 @@ void NodeMap::createLocalNodeMap(envire::TraversabilityGrid* travGrid)
 
 NodeMap::NodeMap(double size, base::Pose2D pos,
                 std::vector< std::vector<double> > elevation,
-		std::vector< std::vector<double> > cost,
-		std::vector< std::vector<double> > risk)
+		            std::vector< std::vector<double> > cost)
 {
     t1 = base::Time::now();
-    printf("Creating NodeMap\n");
     scale = size;
+    std::cout<<"Creating nodemap with scale " << scale << " m" << std::endl;
     globalOffset = pos;
     std::vector<Node*> nodeRow;
     for (uint j = 0; j < elevation[0].size(); j++)
     {
         for (uint i = 0; i < elevation.size(); i++)
-            nodeRow.push_back(new Node(i, j, elevation[j][i], cost[j][i],
-                               risk[j][i]));
+            nodeRow.push_back(new Node(i, j, elevation[j][i], cost[j][i]));
         nodeMatrix.push_back(nodeRow);
         nodeRow.clear();
     }
@@ -198,6 +196,7 @@ void NodeMap::setActualPos(base::Waypoint wPos)
     uint scaledX = (uint)(wPos.position[0] + 0.5);
     uint scaledY = (uint)(wPos.position[1] + 0.5);
     nodeActualPos = this->getNode(scaledX, scaledY);
+    nodeActualPos->pose.orientation = wPos.heading;
     std::cout << "Actual position near node (" <<
         nodeActualPos->pose.position[0] << "," <<
         nodeActualPos->pose.position[1] << ")" << std::endl;
@@ -211,6 +210,7 @@ void NodeMap::setGoal(base::Waypoint wGoal)
     uint scaledX = (uint)(wGoal.position[0] + 0.5);
     uint scaledY = (uint)(wGoal.position[1] + 0.5);
     nodeGoal = this->getNode(scaledX, scaledY);
+    nodeGoal->pose.orientation = wGoal.heading;
     std::cout << "Goal near node (" << nodeGoal->pose.position[0] <<
         "," << nodeGoal->pose.position[1] << ")" << std::endl;
     this->goalPose = wGoal;
@@ -252,7 +252,7 @@ bool NodeMap::updateVisibility(base::Waypoint wPos)
     t1 = base::Time::now();
     double rx,ry,x,y,counter = 0;
     bool flag = false;
-    std::cout << "PLANNER: updating visibility" << std::endl;
+    //std::cout << "PLANNER: updating visibility" << std::endl;
     for (uint j = 0; j < nodeMatrix[0].size(); j++)
     {
         for (uint i = 0; i < nodeMatrix.size(); i++)
@@ -320,7 +320,8 @@ void NodeMap::expandRisk(Node * obstacleNode)
     Node * nodeTarget;
     //std::cout << "Expanding Risk of node (" << obstacleNode->pose.position[0] << "," << obstacleNode->pose.position[1] <<")"<< std::endl;
     expandableNodes.push_back(obstacleNode);
-    for(uint k = 0; k<4; k++)
+    uint kmax = 4;
+    for(uint k = 0; k<kmax; k++)
     {
         if (expandableNodes.size() == 0)
             break;
@@ -331,9 +332,9 @@ void NodeMap::expandRisk(Node * obstacleNode)
             expandableNodes.erase(expandableNodes.begin()+j);
             for (uint i = 0; i<4; i++)
                 if ((nodeTarget->nb4List[i] != NULL) &&
-                    (1 - k*0.25 > nodeTarget->nb4List[i]->risk.obstacle))
+                    (1 - k*(1/(double)kmax) > nodeTarget->nb4List[i]->risk.obstacle))
                 {
-                    nodeTarget->nb4List[i]->risk.obstacle = 1 - k*0.25;
+                    nodeTarget->nb4List[i]->risk.obstacle = 1 - k*(1/(double)kmax);
                     expandableNodes.push_back(nodeTarget->nb4List[i]);
                 }
         }
@@ -346,7 +347,7 @@ envire::ElevationGrid* NodeMap::getEnvirePropagation()
 {
 
     envire::ElevationGrid* elevGrid = new envire::ElevationGrid(
-            nodeMatrix[0].size(), nodeMatrix.size(),
+            this->nodeMatrix[0].size(), this->nodeMatrix.size(),
             this->scale, this->scale);
     for (uint j = 0; j < nodeMatrix[0].size(); j++)
     {
@@ -368,9 +369,10 @@ envire::TraversabilityGrid* NodeMap::getEnvireState()
           this->scale, this->scale);
     travGrid->setTraversabilityClass(0, envire::TraversabilityClass(0.2));
     travGrid->setTraversabilityClass(1, envire::TraversabilityClass(0.0));
-    for(uint i = 0; i < 10; i++)
-        travGrid->setTraversabilityClass(i+2, envire::TraversabilityClass(1-0.05*i));
-
+    for(uint i = 0; i < 2; i++) //TODO: put here number of terrains
+        travGrid->setTraversabilityClass(i+2, envire::TraversabilityClass(1 - 2*(double)i/10));
+    for(uint i = 0; i < 4; i++)
+        travGrid->setTraversabilityClass(i+4, envire::TraversabilityClass(0.6-0.15 * (double)i));
     for (uint j = 0; j < nodeMatrix[0].size(); j++)
     {
         for (uint i = 0; i < nodeMatrix.size(); i++)
@@ -380,9 +382,13 @@ envire::TraversabilityGrid* NodeMap::getEnvireState()
                 travGrid->setTraversability(0,i,j);
             else if (nodeMatrix[j][i]->terrain == 0)
                 travGrid->setTraversability(1, i,j);
+            else if (nodeMatrix[j][i]->risk.obstacle == 0)
+            {
+                travGrid->setTraversability((uint) nodeMatrix[j][i]->terrain + 1, i,j);
+            }
             else
             {
-                travGrid->setTraversability(5 * (uint) nodeMatrix[j][i]->terrain - 3 + (uint)((1-nodeMatrix[j][i]->risk.obstacle)/0.25), i,j);
+                travGrid->setTraversability(3 + (uint)((nodeMatrix[j][i]->risk.obstacle)/0.25), i,j);
             }
         }
     }

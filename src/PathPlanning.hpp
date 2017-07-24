@@ -23,16 +23,20 @@ namespace envire {
 
 namespace PathPlanning_lib
 {
-
+    enum plannerType
+    {//Must be external
+        LOCAL_PLANNER,
+        GLOBAL_PLANNER
+    };
 //__PATH_PLANNER_CLASS__
     class PathPlanning
     {
         private:
             base::samples::RigidBodyState mStartPose;
             double pathCost;
-
+            plannerType type;
         public:
-            PathPlanning();
+            PathPlanning(plannerType _type);
             ~PathPlanning();
             bool setStartNode(base::Waypoint wStart);
             std::vector< std::vector<unsigned int*> > costMap;
@@ -66,9 +70,9 @@ namespace PathPlanning_lib
 
           // Fast Marching Functions
             void fastMarching(base::Waypoint wStart, base::Waypoint wGoal,
-                              NodeMap * nodes);
-            void initNarrowBand(NodeMap * nodes, base::Waypoint wGoal);
-            void getHorizonCost(NodeMap* nodes, Node* horizonNode, base::Waypoint wGoal);
+                              NodeMap * nodes, NodeMap * globalNodes, bool optimize);
+            void initNarrowBand(NodeMap * nodes, base::Waypoint wGoal, NodeMap * globalNodes);
+            void getHorizonCost(NodeMap* localMap, Node* horizonNode, NodeMap* globalMap);
             void propagationFunction(Node* nodeTarget, double scale);
             void getPath(NodeMap * nodes, double tau,
  					                     std::vector<base::Waypoint>& trajectory,
