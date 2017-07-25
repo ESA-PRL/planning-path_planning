@@ -70,18 +70,19 @@ namespace PathPlanning_lib
 
           // Fast Marching Functions
             void fastMarching(base::Waypoint wStart, base::Waypoint wGoal,
-                              NodeMap * nodes, NodeMap * globalNodes, bool optimize);
+                              NodeMap * nodes, NodeMap * globalNodes);
             void initNarrowBand(NodeMap * nodes, base::Waypoint wGoal, NodeMap * globalNodes);
             void getHorizonCost(NodeMap* localMap, Node* horizonNode, NodeMap* globalMap);
             void propagationFunction(Node* nodeTarget, double scale);
-            void getPath(NodeMap * nodes, double tau,
+            bool getPath(NodeMap * nodes, double tau,
  					                     std::vector<base::Waypoint>& trajectory,
-                               std::vector< short int >& locVector);
+                               std::vector< short int >& locVector, int currentSegment);
             Node* minCostNode();
             void gradientNode(Node* nodeTarget, double& dx, double& dy);
-            Node* calculateNextWaypoint(double x, double y, double& dCostX,
+            bool calculateNextWaypoint(double x, double y, double& dCostX,
                                      double& dCostY, double& height,
-                                     short int& locMode, NodeMap * nodes);
+                                     short int& locMode, NodeMap * nodes, double& risk);
+            double interpolate(double a, double b, double g00, double g01, double g10, double g11);
     };
 
 } // end namespace motion_planning_libraries

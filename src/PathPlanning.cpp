@@ -586,8 +586,10 @@ void PathPlanning::costInterpolation(double g1, double g2, uint cTerrain, uint b
 //__FAST_MARCHING_ALGORITHM__
 
 void PathPlanning::fastMarching(base::Waypoint wStart, base::Waypoint wGoal,
-                                NodeMap * nodes, NodeMap * globalNodes, bool optimize)
+                                NodeMap * nodes, NodeMap * globalNodes)
 {
+
+
 
   // Initialize nodeStart, nodeGoal and nodeTarget
     nodes->setActualPos(wStart);
@@ -602,28 +604,26 @@ void PathPlanning::fastMarching(base::Waypoint wStart, base::Waypoint wGoal,
         nodeTarget->pose.position[0] << "," <<
         nodeTarget->pose.position[1] << ")" << std::endl;*/
 
-    Node * nodeFinal = nodes->getActualPos();
 
-    if (nodeFinal->terrain == 0)
-    {
-        std::cout<< "ALERT: entering obstacle area" << std::endl;
-        nodeFinal->state = OPEN;
-    }
 
     /*std::cout << "Fast Marching: propagation will finish at node (" <<
         nodeFinal->pose.position[0] << "," <<
         nodeFinal->pose.position[1] << ")" << std::endl;*/
 
   // Propagation Loop
-
-    if(this->type == LOCAL_PLANNER)
-        std::cout<< "Fast Marching: starting LOCAL propagation loop" << std::endl;
-    else
-        std::cout<< "Fast Marching: starting GLOBAL propagation loop" << std::endl;
     t1 = base::Time::now();
-    if(optimize)
+    if(this->type == LOCAL_PLANNER)
     {
-        while (nodeFinal->state != CLOSED)
+        std::cout<< "Fast Marching: starting LOCAL propagation loop" << std::endl;
+        Node * node00 = (nodes->getNode((uint)(wStart.position[0]/(nodes->scale)), (uint)(wStart.position[1]/(nodes->scale))));
+        Node * node10 = node00->nb4List[2];
+        Node * node01 = node00->nb4List[3];
+        Node * node11 = node00->nb4List[2]->nb4List[3];
+        //std::cout<< "Fast Marching: created LOCAL Final Nodes" << std::endl;
+        while ((node00->state != CLOSED)&&
+               (node01->state != CLOSED)&&
+               (node10->state != CLOSED)&&
+               (node11->state != CLOSED))
         {
             nodeTarget = minCostNode();
             nodeTarget->state = CLOSED;
@@ -631,10 +631,18 @@ void PathPlanning::fastMarching(base::Waypoint wStart, base::Waypoint wGoal,
                 if ((nodeTarget->nb4List[i] != NULL) &&
                     (nodeTarget->nb4List[i]->state == OPEN))
                     propagationFunction(nodeTarget->nb4List[i], nodes->scale);
+            //std::cout<< "Fast Marching: propagated node (" << nodeTarget->pose.position[0] << "," << nodeTarget->pose.position[1] <<")"<< std::endl;
         }
     }
     else
     {
+        std::cout<< "Fast Marching: starting GLOBAL propagation loop" << std::endl;
+        Node * nodeFinal = nodes->getActualPos();
+        if (nodeFinal->terrain == 0)
+        {
+            std::cout<< "ALERT: entering obstacle area" << std::endl;
+            nodeFinal->state = OPEN;
+        }
         while (!narrowBand.empty())
         {
             nodeTarget = minCostNode();
@@ -649,7 +657,6 @@ void PathPlanning::fastMarching(base::Waypoint wStart, base::Waypoint wGoal,
     std::cout<< "Fast Marching: ended propagation loop" << std::endl;
     t1 = base::Time::now() - t1;
     std::cout<<"Computation Time: " << t1 <<std::endl;
-    std::cout<< "Fast Marching: goal cost is " << nodeFinal->work << std::endl;
 
 }
 
@@ -678,7 +685,7 @@ void PathPlanning::initNarrowBand(NodeMap * nodes, base::Waypoint wGoal, NodeMap
         {
             for (uint i = 0; i < sizeI; i++)
             {
-                if(nodes->nodeMatrix[j][i]->state == OPEN)
+                if((nodes->nodeMatrix[j][i]->state == OPEN)&&(nodes->nodeMatrix[j][i]->terrain != 0))
                     for (uint k = 0; k < 4; k++)
                         if((nodes->nodeMatrix[j][i]->nb4List[k] != NULL) &&
                            (nodes->nodeMatrix[j][i]->nb4List[k]->state == HIDDEN))
@@ -803,7 +810,12 @@ void PathPlanning::propagationFunction(Node* nodeTarget, double scale)
 
   //Cost Function to obtain optimal power and locomotion mode
     if(this->type == LOCAL_PLANNER)
-        costFunction(1,P,L);
+    {
+        if (nodeTarget->terrain == 0)
+            costFunction(nodeTarget->terrain,P,L);
+        else
+            costFunction(1,P,L);
+    }
     else
         costFunction(nodeTarget->terrain,P,L);
 
@@ -848,11 +860,11 @@ void PathPlanning::propagationFunction(Node* nodeTarget, double scale)
 
 //__GRADIENT_DESCENT_METHOD__
 
-void PathPlanning::getPath(NodeMap * nodes, double tau,
+bool PathPlanning::getPath(NodeMap * nodes, double tau,
  					     std::vector<base::Waypoint>& trajectory,
-               std::vector< short int >& locVector)
+               std::vector< short int >& locVector, int currentSegment)
 {
-    double newX, newY, newH, dCostX, dCostY, heading, cX, cY, normDCostX, normDCostY, distance = 0;
+    double newX, newY, newH, dCostX, dCostY, heading, cX, cY, normDCostX, normDCostY, distance = 0, dHeading, risk;
     short int locMode;
     base::Waypoint sinkPoint;
     base::Waypoint startPoint;
@@ -868,39 +880,117 @@ void PathPlanning::getPath(NodeMap * nodes, double tau,
         sinkPoint.position[0] = nodes->getGoal()->pose.position[0];
         sinkPoint.position[1] = nodes->getGoal()->pose.position[1];
         sinkPoint.heading = nodes->getGoal()->pose.orientation;
-        startPoint = nodes->actualPose;
   //  }
 
-    cX = startPoint.position[0]; //Position to take into account when calculating heading for Wheel-walking waypoints
-    cY = startPoint.position[1]; //Position to take into account when calculating heading for Wheel-walking waypoints
+  //  cX = startPoint.position[0]; //Position to take into account when calculating heading for Wheel-walking waypoints
+  //  cY = startPoint.position[1]; //Position to take into account when calculating heading for Wheel-walking waypoints
 
     base::Waypoint wNew;
-    Node* nextNode;
-    calculateNextWaypoint(startPoint.position[0], startPoint.position[1], dCostX, dCostY, newH, locMode, nodes);
-    startPoint.position[2] = newH;
-    //trajectory.insert(trajectory.begin(), startPoint);
-    trajectory.push_back(startPoint);
-    //locVector.insert(locVector.begin(), locMode);
-    locVector.push_back(locMode);
-    //std::cout<< "Loc Mode inicial: "  << locVector.front() << std::endl;
-    newX = trajectory.back().position[0];
-    newY = trajectory.back().position[1];
+
+
+
+
+    if (!trajectory.empty())
+    {
+          std::cout<< "PLANNER: Repairing a trajectory of " << trajectory.size() << " waypoints"<<  std::endl;
+          std::cout<< "PLANNER: Current Segment " << currentSegment <<  std::endl;
+
+          startPoint = nodes->actualPose;
+          calculateNextWaypoint(startPoint.position[0], startPoint.position[1], dCostX, dCostY, newH, locMode, nodes, risk);
+          dHeading = acos((-cos(trajectory.back().heading)*dCostX - sin(trajectory.back().heading)*dCostY)/sqrt(pow(dCostX,2)+pow(dCostY,2)));
+          if(dHeading > 0.7854/2)
+          {
+              //The rover must turn around, the heading is not good
+              std::cout<< "PLANNER: Rover must turn around" <<  std::endl;
+              trajectory.clear();
+              startPoint.position[2] = newH;
+              //trajectory.insert(trajectory.begin(), startPoint);
+              trajectory.push_back(startPoint);
+              //locVector.insert(locVector.begin(), locMode);
+              locVector.push_back(locMode);
+              //std::cout<< "Loc Mode inicial: "  << locVector.front() << std::endl;
+              newX = trajectory.back().position[0];
+              newY = trajectory.back().position[1];
+          }
+          else
+          {
+              std::cout<< "PLANNER: Rover repairs actual trajectory" <<  std::endl;
+              std::cout<< "PLANNER: currentSegment = " << currentSegment <<  std::endl;
+              std::cout<< "PLANNER: size of trajectory = " << trajectory.size() << std::endl;
+              for(int i = currentSegment; i < trajectory.size(); i++)
+              {
+                  /*if(i==currentSegment)
+                  {
+                      startPoint = nodes->actualPose;
+                      calculateNextWaypoint(startPoint.position[0], startPoint.position[1], dCostX, dCostY, newH, locMode, nodes, risk);
+                      startPoint.position[2] = newH;
+                      //trajectory.insert(trajectory.begin(), startPoint);
+                      trajectory.push_back(startPoint);
+                      //locVector.insert(locVector.begin(), locMode);
+                      locVector.push_back(locMode);
+                      //std::cout<< "Loc Mode inicial: "  << locVector.front() << std::endl;
+                  }*/
+                  calculateNextWaypoint(trajectory.back().position[0]/nodes->scale, trajectory.back().position[1]/nodes->scale, dCostX, dCostY, newH, locMode, nodes,risk);
+                  /*std::cout<< "PLANNER: dCostX " << dCostX <<  std::endl;
+                  std::cout<< "PLANNER: dCostY " << dCostY <<  std::endl;
+                  std::cout<< "PLANNER: cos(heading) " << cos(trajectory.back().heading) <<  std::endl;
+                  std::cout<< "PLANNER: sin(heading) " << sin(trajectory.back().heading)<<  std::endl;
+                  std::cout<< "PLANNER: heading " << trajectory.back().heading <<  std::endl;*/
+                  dHeading = acos((-cos(trajectory.back().heading)*dCostX - sin(trajectory.back().heading)*dCostY)/sqrt(pow(dCostX,2)+pow(dCostY,2)));
+                  /*std::cout<< "PLANNER: waypoint number " << i <<  std::endl;
+                  std::cout<< "PLANNER: dHeading " << dHeading <<  std::endl;*/
+                  if(dHeading > 0.7854/2)
+                  {
+                      std::cout<< "PLANNER: Rover repairs from waypoint " << i <<  std::endl;
+                      break;
+                  }
+              }
+              newX = trajectory.back().position[0]/nodes->scale;
+              newY = trajectory.back().position[1]/nodes->scale;
+              trajectory.back().position[0] = trajectory.back().position[0]/nodes->scale;
+              trajectory.back().position[1] = trajectory.back().position[1]/nodes->scale;
+          }
+    }
+    else
+    {
+        startPoint = nodes->actualPose;
+        calculateNextWaypoint(startPoint.position[0], startPoint.position[1], dCostX, dCostY, newH, locMode, nodes, risk);
+        startPoint.position[2] = newH;
+        //trajectory.insert(trajectory.begin(), startPoint);
+        trajectory.push_back(startPoint);
+        //locVector.insert(locVector.begin(), locMode);
+        locVector.push_back(locMode);
+        //std::cout<< "Loc Mode inicial: "  << locVector.front() << std::endl;
+        newX = trajectory.back().position[0];
+        newY = trajectory.back().position[1];
+    }
+
+
     while(sqrt(pow((trajectory.back().position[0] - sinkPoint.position[0]),2) +
              pow((trajectory.back().position[1] - sinkPoint.position[1]),2)) > (2*tau))
     {
         /*if (sqrt(pow(dCostX,2)+pow(dCostY,2)) < 0.9)
              std::cout<< "ERROR: " << sqrt(pow(dCostX,2)+pow(dCostY,2)) << std::endl;*/
-
+        trajectory.back().position[0] = trajectory.back().position[0]*nodes->scale;
+        trajectory.back().position[1] = trajectory.back().position[1]*nodes->scale;
         normDCostX = dCostX/sqrt(pow(dCostX,2) + pow(dCostY,2));
         normDCostY = dCostY/sqrt(pow(dCostX,2) + pow(dCostY,2));
         newX = newX - tau*normDCostX;
         newY = newY - tau*normDCostY;
 
-        nextNode = calculateNextWaypoint(newX, newY, dCostX, dCostY, newH, locMode, nodes);
-        if (nextNode != NULL)
-            wNew.position = Eigen::Vector3d(nextNode->pose.position[0],nextNode->pose.position[1],newH);
+        bool isNearHidden = calculateNextWaypoint(newX, newY, dCostX, dCostY, newH, locMode, nodes, risk);
+        if (!isNearHidden)
+            return false;
         else
             wNew.position = Eigen::Vector3d(newX,newY,newH);
+        dHeading = acos((normDCostX*dCostX + normDCostY*dCostY)/sqrt(pow(dCostX,2)+pow(dCostY,2)));
+        /*if(dHeading > 0.7854)
+        {
+            std::cout<< "ERROR at node (" << newX << "," << newY <<")"<< std::endl;
+            std::cout<< "Heading change larger than (" << (acos((normDCostX*dCostX + normDCostY*dCostY)/sqrt(pow(dCostX,2)+pow(dCostY,2)))) << std::endl;
+            return false;
+        }*/
+
 
         /*if ((locMode == 0)&&(locVector.back() == 0)) //Driving Mode
             wNew.heading = atan2(-dCostY,-dCostX);
@@ -924,30 +1014,34 @@ void PathPlanning::getPath(NodeMap * nodes, double tau,
                  pow((newY - trajectory.back().position[1]),2))*nodes->scale;
         trajectory.push_back(wNew);
         locVector.push_back(locMode);
-	      if (distance > 0.8)
-	          break;
+	      /*if (distance > 0.8)
+	          break;*/
         if (trajectory.size()>999)
         {
             std::cout<< "ERROR at node (" << newX << "," << newY <<")"<< std::endl;
-            break;
+            trajectory.back().position[0] = trajectory.back().position[0]*nodes->scale;
+            trajectory.back().position[1] = trajectory.back().position[1]*nodes->scale;
+            return false;
         }
     }
-    if (sqrt(pow((trajectory.back().position[0] - sinkPoint.position[0]),2) +
-             pow((trajectory.back().position[1] - sinkPoint.position[1]),2)) <= (2*tau))
-    {
-        calculateNextWaypoint(sinkPoint.position[0], sinkPoint.position[1], dCostX, dCostY, newH, locMode, nodes);
-        sinkPoint.position[2] = newH;
-        trajectory.push_back(sinkPoint);
-        locVector.push_back(locMode);
-        std::cout<< "PLANNER: Adding final waypoint with heading" << sinkPoint.heading << " "<< trajectory.back().heading<<  std::endl;
-    }
-
+    trajectory.back().position[0] = trajectory.back().position[0]*nodes->scale;
+    trajectory.back().position[1] = trajectory.back().position[1]*nodes->scale;
+    calculateNextWaypoint(sinkPoint.position[0], sinkPoint.position[1], dCostX, dCostY, newH, locMode, nodes, risk);
+    if (sinkPoint.heading == -0)
+        sinkPoint.heading = 0;
+    sinkPoint.position[0] = sinkPoint.position[0]*nodes->scale;
+    sinkPoint.position[1] = sinkPoint.position[1]*nodes->scale;
+    sinkPoint.position[2] = newH;
+    trajectory.push_back(sinkPoint);
+    locVector.push_back(locMode);
+    std::cout<< "PLANNER: Adding final waypoint with heading" << sinkPoint.heading << " "<< trajectory.back().heading<<  std::endl;
+    return true;
   //Rescaling resulting trajectory
-    for (uint i = 0; i<trajectory.size(); i++)
+    /*for (uint i = 0; i<trajectory.size(); i++)
     {
         trajectory[i].position[0] = trajectory[i].position[0]*nodes->scale;
         trajectory[i].position[1] = trajectory[i].position[1]*nodes->scale;
-    }
+    }*/
 }
 
 
@@ -1019,7 +1113,7 @@ void PathPlanning::gradientNode(Node* nodeTarget, double& dnx, double& dny)
 
 //__INTERPOLATION_ON_WAYPOINT__
 
-Node* PathPlanning::calculateNextWaypoint(double x, double y, double& dCostX, double& dCostY, double& height, short int& locMode, NodeMap * nodes)
+bool PathPlanning::calculateNextWaypoint(double x, double y, double& dCostX, double& dCostY, double& height, short int& locMode, NodeMap * nodes, double& risk)
 {
 
     uint i = (uint)(x);
@@ -1036,22 +1130,11 @@ Node* PathPlanning::calculateNextWaypoint(double x, double y, double& dCostX, do
     Node * node11 = node00->nb4List[2]->nb4List[3];
 
 
-    /*if ((node00->state == OBSTACLE)||(node01->state == OBSTACLE)||
-        (node10->state == OBSTACLE)||(node11->state == OBSTACLE))
+    if ((node00->state == HIDDEN)||(node01->state == HIDDEN)||
+        (node10->state == HIDDEN)||(node11->state == HIDDEN))
     {
-        Node* minNode = node00;
-        if (node10->work < minNode->work)
-            minNode = node10;
-        if (node01->work < minNode->work)
-            minNode = node01;
-        if (node11->work < minNode->work)
-            minNode = node11;
-        dCostX = x-minNode->pose.position[0];
-        dCostY = y-minNode->pose.position[1];
-        height = minNode->elevation;
-        locMode = minNode->nodeLocMode;
-        return minNode;
-    }
+        return false;
+    }/*
     else
     {*/
         gradientNode( node00, gx00, gy00);
@@ -1069,8 +1152,11 @@ Node* PathPlanning::calculateNextWaypoint(double x, double y, double& dCostX, do
         double L01 = node01->nodeLocMode;
         double L11 = node11->nodeLocMode;
 
-        dCostX = gx00 + (gx10 - gx00)*a + (gx01 - gx00)*b + (gx11 + gx00 - gx10 - gx01)*a*b;
-        dCostY = gy00 + (gy10 - gy00)*a + (gy01 - gy00)*b + (gy11 + gy00 - gy10 - gy01)*a*b;
+        dCostX = interpolate(a,b,gx00,gx01,gx10,gx11);
+        dCostY = interpolate(a,b,gy00,gy01,gy10,gy11);
+
+        /*dCostX = gx00 + (gx10 - gx00)*a + (gx01 - gx00)*b + (gx11 + gx00 - gx10 - gx01)*a*b;
+        dCostY = gy00 + (gy10 - gy00)*a + (gy01 - gy00)*b + (gy11 + gy00 - gy10 - gy01)*a*b;*/
         height = h00 + (h10 - h00)*a + (h01 - h00)*b + (h11 + h00 - h10 - h01)*a*b;
 
        // if (L00 == WHEEL_WALKING)
@@ -1080,6 +1166,12 @@ Node* PathPlanning::calculateNextWaypoint(double x, double y, double& dCostX, do
         //    std::cout<< "Resultado: " << (unsigned int)((L00 + L10 + L01 + L11)/4.0+0.5) << std::endl; sleep(1);
         //}
         locMode = (int)((L00 + L10 + L01 + L11)/4.0); //PROVISIONAL, FIX THIS to properly interpolate locomotion mode
-        return NULL;
+        return true;
     //}
+}
+
+
+double PathPlanning::interpolate(double a, double b, double g00, double g01, double g10, double g11)
+{
+    return g00 + (g10 - g00)*a + (g01 - g00)*b + (g11 + g00 - g10 - g01)*a*b;
 }
