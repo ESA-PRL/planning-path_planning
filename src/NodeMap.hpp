@@ -159,6 +159,7 @@ double aspect;
           envire::ElevationGrid* getEnvirePropagation();
           envire::TraversabilityGrid* getEnvireState();
           void expandRisk(Node * obstacleNode);
+          double getLocomotionMode(double x, double y);
   };
 } // end namespace motion_planning_libraries_nodemap
 

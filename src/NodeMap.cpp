@@ -395,3 +395,20 @@ envire::TraversabilityGrid* NodeMap::getEnvireState()
     std::cout << "State Map is updated" << std::endl;
     return travGrid;
 }
+
+double NodeMap::getLocomotionMode(double x, double y)
+{
+    uint i = (uint)(x);
+    uint j = (uint)(y);
+    double a = x - (double)(i);
+    double b = y - (double)(j);
+
+    Node * node00 = getNode(i, j);
+    Node * node10 = node00->nb4List[2];
+    Node * node01 = node00->nb4List[3];
+    Node * node11 = node00->nb4List[2]->nb4List[3];
+
+    std::cout << "NodeLocModes: " << node00->nodeLocMode << "-" << node01->nodeLocMode << "-" << node10->nodeLocMode << "-" << node11->nodeLocMode << std::endl;
+
+    return (double)ceil((node00->nodeLocMode + node10->nodeLocMode + node01->nodeLocMode + node11->nodeLocMode)/4.0);
+}
