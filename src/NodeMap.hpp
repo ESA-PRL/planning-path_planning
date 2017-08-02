@@ -126,6 +126,7 @@ double aspect;
           state = OPEN;
           nodeParent = NULL;
           localNodeMatrix = NULL;
+          nodeLocMode = DRIVING;
       }
   };
 
