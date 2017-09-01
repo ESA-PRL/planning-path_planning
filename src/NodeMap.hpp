@@ -109,7 +109,7 @@ double aspect;
           nodeParent = NULL;
       }
 
-      Node(uint x_, uint y_, double e_, double c_)
+      Node(uint x_, uint y_, double e_, double c_, nodeState s_)
       {
           pose.position[0] = (double)x_;
           pose.position[1] = (double)y_;
@@ -123,7 +123,7 @@ double aspect;
           g = INF;
           key[0] = INF;
           key[1] = INF;
-          state = OPEN;
+          state = s_;
           nodeParent = NULL;
           localNodeMatrix = NULL;
           nodeLocMode = DRIVING;
@@ -146,20 +146,25 @@ double aspect;
           void setGoal(base::Waypoint wGoal);
           Node * getActualPos();
           Node * getGoal();
+          std::vector<Node*> horizonNodes;
+          std::vector<Node*> closedNodes;
+          std::vector<Node*> obstacleNodes;
           NodeMap();
           NodeMap(envire::TraversabilityGrid* travGrid);
           NodeMap(double size, base::Pose2D pos,
                   std::vector< std::vector<double> > elevation,
-                  std::vector< std::vector<double> > cost);
+                  std::vector< std::vector<double> > cost, nodeState state);
           void resetPropagation();
           void updateNodeMap(envire::TraversabilityGrid* travGrid);
           void makeNeighbourhood();
+          void makeNeighbourhood(Node* n, uint i, uint j);
           void createLocalNodeMap(envire::TraversabilityGrid* travGrid);
           void hidAll();
-          bool updateVisibility(base::Waypoint wPos);
+          bool updateVisibility(base::Waypoint wPos, NodeMap* globalMap);
+          void setHorizonCost(Node* horizonNode, NodeMap* globalMap);
           envire::ElevationGrid* getEnvirePropagation();
           envire::TraversabilityGrid* getEnvireState();
-          void expandRisk(Node * obstacleNode);
+          void expandRisk(std::vector<Node*> expandableNodes);
           double getLocomotionMode(double x, double y);
   };
 } // end namespace motion_planning_libraries_nodemap

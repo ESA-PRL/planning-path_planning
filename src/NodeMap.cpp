@@ -23,7 +23,7 @@ NodeMap::NodeMap(envire::TraversabilityGrid* travGrid)
         for (uint i = 0; i < travGrid->getCellSizeX(); i++)
         {
             klass = travGrid->getGridData()[j][i];
-            nodeRow.push_back(new Node(i, j, 0, klass==1?0:1));
+            nodeRow.push_back(new Node(i, j, 0, klass==1?0:1,OPEN));
             switch(klass)
             {
                 case 0: //Unknown node
@@ -76,32 +76,31 @@ void NodeMap::createLocalNodeMap(envire::TraversabilityGrid* travGrid)
 
 NodeMap::NodeMap(double size, base::Pose2D pos,
                 std::vector< std::vector<double> > elevation,
-		            std::vector< std::vector<double> > cost)
+		            std::vector< std::vector<double> > cost, nodeState state)
 {
     t1 = base::Time::now();
     scale = size;
     std::cout<<"Creating nodemap with scale " << scale << " m" << std::endl;
     globalOffset = pos;
     std::vector<Node*> nodeRow;
-    for (uint j = 0; j < elevation[0].size(); j++)
+    for (uint j = 0; j < elevation.size(); j++)
     {
-        for (uint i = 0; i < elevation.size(); i++)
-            nodeRow.push_back(new Node(i, j, elevation[j][i], cost[j][i]));
+        for (uint i = 0; i < elevation[0].size(); i++)
+            nodeRow.push_back(new Node(i, j, elevation[j][i], cost[j][i], state));
         nodeMatrix.push_back(nodeRow);
         nodeRow.clear();
+        //std::cout << "PLANNER: row number " << j << std::endl;
     }
     std::cout<<"NodeMap created in " << (base::Time::now()-t1) << " s" << std::endl;
-    t1 = base::Time::now();
-    makeNeighbourhood();
-    std::cout<<"Neighbourhood made in " << (base::Time::now()-t1) << " s" << std::endl;
 }
 
 void NodeMap::makeNeighbourhood()
 {
   printf("Making Neighbourhood\n");
-  for (uint j = 0; j < nodeMatrix[0].size(); j++)
+    t1 = base::Time::now();
+  for (uint j = 0; j < nodeMatrix.size(); j++)
   {
-      for (uint i = 0; i < nodeMatrix.size(); i++)
+      for (uint i = 0; i < nodeMatrix[0].size(); i++)
       {
 
   //                 4 - Neighbourhood
@@ -131,18 +130,27 @@ void NodeMap::makeNeighbourhood()
   //       nb4List[5] __ nb4List[6] __ nb4List[7]
   //       (i-1, j-1) __  (i, j-1)  __ (i+1, j-1)
 
-          nodeMatrix[j][i]->nb8List.push_back(getNode(i+1,j));
+          /*nodeMatrix[j][i]->nb8List.push_back(getNode(i+1,j));
           nodeMatrix[j][i]->nb8List.push_back(getNode(i+1,j+1));
           nodeMatrix[j][i]->nb8List.push_back(getNode(i,  j+1));
           nodeMatrix[j][i]->nb8List.push_back(getNode(i-1,j+1));
           nodeMatrix[j][i]->nb8List.push_back(getNode(i-1,j));
           nodeMatrix[j][i]->nb8List.push_back(getNode(i-1,j-1));
           nodeMatrix[j][i]->nb8List.push_back(getNode(i,  j-1));
-          nodeMatrix[j][i]->nb8List.push_back(getNode(i+1,j-1));
+          nodeMatrix[j][i]->nb8List.push_back(getNode(i+1,j-1));*/
       }
   }
+    std::cout<<"4 - Neighbourhood made in " << (base::Time::now()-t1) << " s" << std::endl;
 }
 
+void NodeMap::makeNeighbourhood(Node* n, uint i, uint j)
+{
+    n->nb4List.clear();
+    n->nb4List.push_back(getNode(i,j-1));
+    n->nb4List.push_back(getNode(i-1,j));
+    n->nb4List.push_back(getNode(i+1,j));
+    n->nb4List.push_back(getNode(i,j+1));
+}
 void NodeMap::updateNodeMap(envire::TraversabilityGrid* travGrid)
 {
     t1 = base::Time::now();
@@ -178,15 +186,25 @@ void NodeMap::updateNodeMap(envire::TraversabilityGrid* travGrid)
 
 void NodeMap::resetPropagation()
 {
-    for (uint j = 0; j < nodeMatrix[0].size(); j++)
+    if(!closedNodes.empty())
     {
-        for (uint i = 0; i < nodeMatrix.size(); i++)
+    std::cout << "PLANNER: making closed nodes open again" << std::endl;
+        for (uint i = 0; i < closedNodes.size(); i++)
+        {
+            closedNodes[i]->state = OPEN;
+            closedNodes[i]->work = INF;
+        }
+        closedNodes.clear();
+    }
+    /*for (uint j = 0; j < nodeMatrix.size(); j++)
+    {
+        for (uint i = 0; i < nodeMatrix[0].size(); i++)
         {
             if (nodeMatrix[j][i]->state == CLOSED)
                 nodeMatrix[j][i]->state = OPEN;
             nodeMatrix[j][i]->work = INF;
         }
-    }
+    }*/
 }
 
 void NodeMap::setActualPos(base::Waypoint wPos)
@@ -239,66 +257,78 @@ Node* NodeMap::getNode(uint i, uint j)
 // Simulation function
 void NodeMap::hidAll()
 {
-    for (uint j = 0; j < nodeMatrix[0].size(); j++)
-        for (uint i = 0; i < nodeMatrix.size(); i++)
+    for (uint j = 0; j < nodeMatrix.size(); j++)
+        for (uint i = 0; i < nodeMatrix[0].size(); i++)
             nodeMatrix[j][i]->state = HIDDEN;
     std::cout << "All nodes are hidden" << std::endl;
 }
 
 
 // Simulation function
-bool NodeMap::updateVisibility(base::Waypoint wPos)
+bool NodeMap::updateVisibility(base::Waypoint wPos, NodeMap* globalMap)
 {
     t1 = base::Time::now();
     double rx,ry,x,y,counter = 0;
     bool flag = false;
-    //std::cout << "PLANNER: updating visibility" << std::endl;
-    for (uint j = 0; j < nodeMatrix[0].size(); j++)
+    std::cout << "PLANNER: updating visibility" << std::endl;
+    //Simulating what ExoTeR sees, a circular area of 1.4m radius
+    uint a = (uint)(fmax(0,((wPos.position[1] - 2.0)/scale)));
+    uint b = (uint)(fmin(nodeMatrix.size(),((wPos.position[1] + 2.0)/scale)));
+    uint c = (uint)(fmax(0,((wPos.position[0] - 2.0)/scale)));
+    uint d = (uint)(fmin(nodeMatrix[0].size(),((wPos.position[0] + 2.0)/scale)));
+    std::cout << "PLANNER: a = " << a << ", b = " << b << ", c = "<< c << ", d = " << d << std::endl;
+    Node* nodeTarget;
+    obstacleNodes.clear();
+    for (uint j = a; j < b; j++)
     {
-        for (uint i = 0; i < nodeMatrix.size(); i++)
+        for (uint i = c; i < d; i++)
         {
-            if(nodeMatrix[j][i]->state != HIDDEN)
+            nodeTarget = nodeMatrix[j][i];
+            makeNeighbourhood(nodeTarget,i,j); //TODO: this is making neighbours all the time...
+            //std::cout << "PLANNER: analyzing node " << i << ", " << j << std::endl;
+            if(nodeTarget->state != HIDDEN)
             {
-                if ((((nodeMatrix[j][i]->nb4List[1] != NULL) &&
-                          (nodeMatrix[j][i]->nb4List[2] != NULL)) &&
-                         ((nodeMatrix[j][i]->nb4List[1]->terrain == 0) &&
-                          (nodeMatrix[j][i]->nb4List[2]->terrain == 0))) ||
-                        ((nodeMatrix[j][i]->nb4List[0] != NULL) &&
-                          (nodeMatrix[j][i]->nb4List[3] != NULL)) &&
-                        ((nodeMatrix[j][i]->nb4List[0]->terrain == 0) &&
-                          (nodeMatrix[j][i]->nb4List[3]->terrain == 0)))
+                if ((((nodeTarget->nb4List[1] != NULL) &&
+                          (nodeTarget->nb4List[2] != NULL)) &&
+                         ((nodeTarget->nb4List[1]->terrain == 0) &&
+                          (nodeTarget->nb4List[2]->terrain == 0))) ||
+                        ((nodeTarget->nb4List[0] != NULL) &&
+                          (nodeTarget->nb4List[3] != NULL)) &&
+                        ((nodeTarget->nb4List[0]->terrain == 0) &&
+                          (nodeTarget->nb4List[3]->terrain == 0)))
                 {
                   // Obstacle nodes are too close
-                   if (nodeMatrix[j][i]->terrain != 0)
-                   {
-                     nodeMatrix[j][i]->terrain = 0;
-                   }
+                     nodeTarget->terrain = 0;
                 }
-                else if (nodeMatrix[j][i]->state == CLOSED)
+                /*else if (nodeTarget->state == CLOSED)
                 {
                   // Just making traversable nodes OPEN again
-                    nodeMatrix[j][i]->state = OPEN;
-                }
-                counter++;
+                    nodeTarget->state = OPEN;
+                }*/
             }
             else
             {
                 rx = i*scale + globalOffset.position[0];
                 ry = j*scale + globalOffset.position[1];
-                x = wPos.position[0] + 0.4*cos(wPos.heading);
-                y = wPos.position[1] + 0.4*sin(wPos.heading);
+                x = wPos.position[0];// + 0.4*cos(wPos.heading);
+                y = wPos.position[1];// + 0.4*sin(wPos.heading);
                 if ((sqrt(pow(rx-x,2) +
-                             pow(ry-y,2)) < 1)&&(nodeMatrix[j][i]->state == HIDDEN))
+                             pow(ry-y,2)) < 1.5)&&(nodeTarget->state == HIDDEN))
                 {
                     flag = true;
-                    nodeMatrix[j][i]->state = OPEN;
-                    if (nodeMatrix[j][i]->terrain == 0)
-                        expandRisk(nodeMatrix[j][i]);
-                    counter++;
+                    nodeTarget->state = OPEN;
+                    if (nodeTarget->terrain == 0)
+                    {
+                        //std::cout << "PLANNER: Its an obstacle" << std::endl;
+                        obstacleNodes.push_back(nodeTarget);
+                    }
                 }
             }
         }
     }
+
+    //expandRisk(obstacleNodes);
+    obstacleNodes.clear(); // DEBUGGING PURPOSES
 
     // Conservative method to avoid passing through corridors of length 1 node
 
@@ -307,19 +337,117 @@ bool NodeMap::updateVisibility(base::Waypoint wPos)
          (nodeTarget->nb4List[2]->state == OBSTACLE))
         nodeTarget->state = OBSTACLE;*/
 
-    if(flag == true)
+    // Check actual horizon nodes
+    if(flag == true) //CONTINUE HERE!!!
     {
+        std::cout << "PLANNER: new visible nodes" << std::endl;
+        if (!horizonNodes.empty())
+        {
+            std::cout << "PLANNER: checking previous horizon nodes, number = "<< horizonNodes.size() << std::endl;
+            bool isHorizon = false;
+            for (uint i = horizonNodes.size()-1; i > 0; i--)
+            {
+                for (uint k = 0; k < 4; k++)
+                {
+                    if ((horizonNodes[i]->nb4List[k] != NULL) && ((horizonNodes[i]->nb4List[k]->state == HIDDEN)))
+                        isHorizon = true;
+                }
+                if(!isHorizon)
+                {
+                    horizonNodes[i]->work = INF;
+                    horizonNodes[i]->state = OPEN;
+                    horizonNodes.erase(horizonNodes.begin() + i);
+                    //isHorizon = false;
+                }
+                isHorizon = false;
+            }
+            for (uint k = 0; k < 4; k++)
+            {
+                if ((horizonNodes[0]->nb4List[k] != NULL) && ((horizonNodes[0]->nb4List[k]->state == HIDDEN)))
+                    isHorizon = true;
+            }
+            if(!isHorizon)
+            {
+                horizonNodes[0]->work = INF;
+                horizonNodes[0]->state = OPEN;
+                horizonNodes.erase(horizonNodes.begin());
+                //isHorizon = false;
+            }
+            isHorizon = false;
+        }
+
+        std::cout << "PLANNER: adding new horizon nodes" << std::endl;
+        for (uint j = a; j < b; j++)
+            for (uint i = c; i < d; i++)
+            {
+                //Here Horizon Nodes must be updated
+                nodeTarget = nodeMatrix[j][i];
+                if((nodeTarget->state == OPEN) &&//Being OPEN it cannot be horizon
+                   (nodeTarget->terrain != 0))
+                    for (uint k = 0; k < 4; k++)
+                    {
+                        if((nodeTarget->nb4List[k] != NULL) &&
+                           (nodeTarget->nb4List[k]->state ==
+                            HIDDEN))
+                        {
+                            horizonNodes.push_back(nodeTarget);
+                            setHorizonCost(nodeTarget, globalMap);
+                            nodeTarget->state = CLOSED;
+                            break;
+                        }
+                    }
+            }
         std::cout << "Visibility is updated in " << (base::Time::now()-t1) << " s" << std::endl;
-        std::cout<< 100*counter/(nodeMatrix.size()*nodeMatrix[0].size()) << "% of map is visible " << std::endl;
+        //std::cout<< 100*visibleNodes.size()/(nodeMatrix.size()*nodeMatrix[0].size()) << "% of map is visible " << std::endl;
+    }
+    return flag;
+}
+
+void NodeMap::setHorizonCost(Node* horizonNode, NodeMap* globalMap)
+{
+    double x = (horizonNode->pose.position[0]*this->scale +
+               this->globalOffset.position[0]) / globalMap->scale +
+               globalMap->globalOffset.position[0];
+    double y = (horizonNode->pose.position[1]*this->scale +
+               this->globalOffset.position[1]) / globalMap->scale +
+               globalMap->globalOffset.position[1];
+
+    uint i = (uint)(x);
+    uint j = (uint)(y);
+    double a = x - (double)(i);
+    double b = y - (double)(j);
+
+    Node * node00 = (globalMap->getNode(i,j));
+    Node * node10 = node00->nb4List[2];
+    Node * node01 = node00->nb4List[3];
+    Node * node11 = node00->nb4List[2]->nb4List[3];
+
+    double w00 = node00->work;
+    double w10 = node10->work;
+    double w01 = node01->work;
+    double w11 = node11->work;
+
+    horizonNode->work = w00 + (w10 - w00)*a + (w01 - w00)*b + (w11 + w00 - w10 - w01)*a*b;
+    if ((horizonNode->work < 0)||(horizonNode->work == INF))
+    {
+        std::cout << "ERROR: Horizon Node " <<
+          horizonNode->pose.position[0] << "," <<
+          horizonNode->pose.position[1] << ")" << std::endl;
+        std::cout << " - work = " << horizonNode->work << std::endl;
+        std::cout << " - w00 =  " << w00 << std::endl;
+        std::cout << " - w10 =  " << w10 << std::endl;
+        std::cout << " - w01 =  " << w01 << std::endl;
+        std::cout << " - w11 =  " << w11 << std::endl;
+        std::cout << " - a =  " << a << std::endl;
+        std::cout << " - b =  " << b << std::endl;
+        std::cout << " - i =  " << i << std::endl;
+        std::cout << " - j =  " << j << std::endl;
     }
 }
 
-void NodeMap::expandRisk(Node * obstacleNode)
+void NodeMap::expandRisk(std::vector<Node*> expandableNodes)
 {
-    std::vector<Node*> expandableNodes;
     Node * nodeTarget;
-    //std::cout << "Expanding Risk of node (" << obstacleNode->pose.position[0] << "," << obstacleNode->pose.position[1] <<")"<< std::endl;
-    expandableNodes.push_back(obstacleNode);
     uint kmax = 4;
     for(uint k = 0; k<kmax; k++)
     {
@@ -329,14 +457,21 @@ void NodeMap::expandRisk(Node * obstacleNode)
         {
             //std::cout << "k = " << k << ", j = " << j << std::endl;
             nodeTarget = expandableNodes[j];
+            //std::cout << "PLANNER: expanding node " << nodeTarget->pose.position[0] << " " << nodeTarget->pose.position[1] << std::endl;
+            //std::cout << "PLANNER: expandableNodes -> " << expandableNodes.size() << std::endl;
             expandableNodes.erase(expandableNodes.begin()+j);
             for (uint i = 0; i<4; i++)
+            {
+                //std::cout << "Number of neighbors " << nodeTarget->nb4List.size() << std::endl;
                 if ((nodeTarget->nb4List[i] != NULL) &&
-                    (1 - k*(1/(double)kmax) > nodeTarget->nb4List[i]->risk.obstacle))
+                    (1 - k*0.25 > nodeTarget->nb4List[i]->risk.obstacle))
                 {
+                    //std::cout << "Im here" << std::endl;
                     nodeTarget->nb4List[i]->risk.obstacle = 1 - k*(1/(double)kmax);
                     expandableNodes.push_back(nodeTarget->nb4List[i]);
                 }
+                //std::cout << "k = " << k << ", j = " << j << ", i = " << i << std::endl;
+            }
         }
     }
 
@@ -349,9 +484,9 @@ envire::ElevationGrid* NodeMap::getEnvirePropagation()
     envire::ElevationGrid* elevGrid = new envire::ElevationGrid(
             this->nodeMatrix[0].size(), this->nodeMatrix.size(),
             this->scale, this->scale);
-    for (uint j = 0; j < nodeMatrix[0].size(); j++)
+    for (uint j = 0; j < nodeMatrix.size(); j++)
     {
-        for (uint i = 0; i < nodeMatrix.size(); i++)
+        for (uint i = 0; i < nodeMatrix[0].size(); i++)
         {
             if(nodeMatrix[j][i]->work != INF)
                 elevGrid->get((double)(i)*scale,(double)(j)*scale) = nodeMatrix[j][i]->work;
@@ -369,13 +504,13 @@ envire::TraversabilityGrid* NodeMap::getEnvireState()
           this->scale, this->scale);
     travGrid->setTraversabilityClass(0, envire::TraversabilityClass(0.2));
     travGrid->setTraversabilityClass(1, envire::TraversabilityClass(0.0));
-    for(uint i = 0; i < 2; i++) //TODO: put here number of terrains
+    for(uint i = 0; i < 1; i++) //TODO: put here number of terrains
         travGrid->setTraversabilityClass(i+2, envire::TraversabilityClass(1 - 2*(double)i/10));
     for(uint i = 0; i < 4; i++)
-        travGrid->setTraversabilityClass(i+4, envire::TraversabilityClass(0.6-0.15 * (double)i));
-    for (uint j = 0; j < nodeMatrix[0].size(); j++)
+        travGrid->setTraversabilityClass(i+3, envire::TraversabilityClass(0.9-0.2 * (double)i));
+    for (uint j = 0; j < nodeMatrix.size(); j++)
     {
-        for (uint i = 0; i < nodeMatrix.size(); i++)
+        for (uint i = 0; i < nodeMatrix[0].size(); i++)
         {
             travGrid->setProbability(1.0, i,j);
             if (nodeMatrix[j][i]->state == HIDDEN)
@@ -384,11 +519,11 @@ envire::TraversabilityGrid* NodeMap::getEnvireState()
                 travGrid->setTraversability(1, i,j);
             else if (nodeMatrix[j][i]->risk.obstacle == 0)
             {
-                travGrid->setTraversability((uint) nodeMatrix[j][i]->terrain + 1, i,j);
+                travGrid->setTraversability(2, i,j);
             }
             else
             {
-                travGrid->setTraversability(3 + (uint)((nodeMatrix[j][i]->risk.obstacle)/0.25), i,j);
+                travGrid->setTraversability(2 + (uint)((nodeMatrix[j][i]->risk.obstacle)/0.25), i,j);
             }
         }
     }
@@ -408,7 +543,7 @@ double NodeMap::getLocomotionMode(double x, double y)
     Node * node01 = node00->nb4List[3];
     Node * node11 = node00->nb4List[2]->nb4List[3];
 
-    std::cout << "NodeLocModes: " << node00->nodeLocMode << "-" << node01->nodeLocMode << "-" << node10->nodeLocMode << "-" << node11->nodeLocMode << std::endl;
+    //std::cout << "NodeLocModes: " << node00->nodeLocMode << "-" << node01->nodeLocMode << "-" << node10->nodeLocMode << "-" << node11->nodeLocMode << std::endl;
 
     return (double)ceil((node00->nodeLocMode + node10->nodeLocMode + node01->nodeLocMode + node11->nodeLocMode)/4.0);
 }

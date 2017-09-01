@@ -46,9 +46,11 @@ void PathPlanning::costFunction(uint Terrain, double& Power, locomotionMode& lM)
     switch(Terrain)
     {
 	      case 0: Power = 10.0;   lM = DRIVING; break;
-	      case 1: Power = 0.088; lM = DRIVING; break;
-        case 2: Power = 1.074; lM = WHEEL_WALKING; break;
-	      //case 2: Power = 0.236; lM = WHEEL_WALKING; break;
+	      //case 1: Power = 0.088; lM = DRIVING; break;
+              //case 2: Power = 1.074; lM = WHEEL_WALKING; break;
+	      //case 2: Power = 0.236; lM = DRIVING; break;
+              case 1: Power = 0.1; lM = DRIVING; break;
+              case 2: Power = 0.2; lM = DRIVING; break;
 	      //case 2: Power = 1.074; lM = DRIVING; break;
     }
 }
@@ -67,8 +69,8 @@ void PathPlanning::fieldDStar(base::Waypoint wStart, base::Waypoint wGoal,
     Node * nodeGoal = nodes->getNode((uint)(wGoal.position[0] + 0.5),
                                      (uint)(wGoal.position[1] + 0.5));
     Node * nodeTarget = nodeGoal;
-    std::cout<< "Goal at (" << nodeTarget->pose.position[0] << "," <<nodeTarget->pose.position[1] << ")" << std::endl;
-    std::cout<< "Start at (" << nodeStart->pose.position[0] << "," <<nodeStart->pose.position[1] << ")" << std::endl;
+    std::cout<< "Goal at (" << nodeTarget->pose.position[0] << "," << nodeTarget->pose.position[1] << ")" << std::endl;
+    std::cout<< "Start at (" << nodeStart->pose.position[0] << "," << nodeStart->pose.position[1] << ")" << std::endl;
 
   // Initialize the List of Open Nodes
     std::list<Node*> openList;
@@ -617,30 +619,45 @@ void PathPlanning::fastMarching(base::Waypoint wStart, base::Waypoint wGoal,
     t1 = base::Time::now();
     if(this->type == LOCAL_PLANNER)
     {
-        std::cout << "LOCAL PLANNER: starting propagation loop" << std::endl;
+        std::cout << "PLANNER: starting local propagation loop" << std::endl;
         Node * node00 =
             (nodes->getNode((uint)(wStart.position[0]/(nodes->scale)),
             (uint)(wStart.position[1]/(nodes->scale))));
         Node * node10 = node00->nb4List[2];
         Node * node01 = node00->nb4List[3];
         Node * node11 = node00->nb4List[2]->nb4List[3];
-        //std::cout<< "Fast Marching: created LOCAL Final Nodes" << std::endl;
-        while ((node00->state != CLOSED)&&
-               (node01->state != CLOSED)&&
-               (node10->state != CLOSED)&&
+        std::cout<< "PLANNER: created LOCAL Final Nodes" << std::endl;
+        if(node00->terrain == 0)
+            std::cout << "PLANNER: rover is on obstacle area??" << std::endl;
+        if(node00->state == HIDDEN)
+            std::cout << "PLANNER: for some reason node00 is hidden... " << std::endl;
+        std::cout << "PLANNER: node00 pose is " << node00->pose.position[0] << "," << node00->pose.position[1] << std::endl;
+        while ((node00->state != CLOSED)||
+               (node01->state != CLOSED)||
+               (node10->state != CLOSED)||
                (node11->state != CLOSED))
         {
             nodeTarget = minCostNode();
+            //std::cout << "PLANNER: next nodetarget is " << nodeTarget->pose.position[0] << "," << nodeTarget->pose.position[1] << std::endl;
+            //std::cout << "PLANNER: with work  " << nodeTarget->work << std::endl;
             nodeTarget->state = CLOSED;
+            //nodes->closedNodes.push_back(nodeTarget);
             for (uint i = 0; i<4; i++)
                 if ((nodeTarget->nb4List[i] != NULL) &&
                     (nodeTarget->nb4List[i]->state == OPEN))
+                {
                     propagationFunction(nodeTarget->nb4List[i], nodes->scale);
+                    if(nodeTarget->nb4List[i] == node00)
+                       std::cout << "PLANNER: work of node00 is " << node00->work << std::endl;
+                    nodes->closedNodes.push_back(nodeTarget->nb4List[i]);//To later erase work value of non close nodes as well!!!
+                }
         }
+        std::cout<< "Fast Marching: ended local propagation loop" << std::endl;
+        std::cout<< "PLANNER: value of local work = " << node00->work << std::endl;
     }
     else
     {
-        std::cout<< "Fast Marching: starting GLOBAL propagation loop" << std::endl;
+        std::cout<< "PLANNER: starting global propagation loop " << std::endl;
         Node * nodeFinal = nodes->getActualPos();
         if (nodeFinal->terrain == 0)
         {
@@ -656,9 +673,9 @@ void PathPlanning::fastMarching(base::Waypoint wStart, base::Waypoint wGoal,
                     (nodeTarget->nb4List[i]->state == OPEN))
                     propagationFunction(nodeTarget->nb4List[i], nodes->scale);
         }
+        std::cout<< "Fast Marching: ended global propagation loop" << std::endl;
     }
 
-    std::cout<< "Fast Marching: ended propagation loop" << std::endl;
     t1 = base::Time::now() - t1;
     std::cout<<"Computation Time: " << t1 <<std::endl;
 
@@ -667,23 +684,35 @@ void PathPlanning::fastMarching(base::Waypoint wStart, base::Waypoint wGoal,
 
 void PathPlanning::initNarrowBand(NodeMap * nodes, base::Waypoint wGoal, NodeMap * globalNodes)
 {
-    std::cout << "Initializing NarrowBand" << std::endl;
+    std::cout << "PLANNER: Initializing NarrowBand" << std::endl;
     Node * nodeGoal = nodes->getGoal();
 
     nodes->resetPropagation();
     narrowBand.clear();
-
+    narrowBand = nodes->horizonNodes;
     if(nodeGoal->state != HIDDEN)
     {
         nodeGoal->work = 0;
         narrowBand.push_back(nodeGoal);
-        std::cout << "GOAL IS VISIBLE" << std::endl;
+        if (this->type == LOCAL_PLANNER)
+            std::cout << "PLANNER: goal node is visible" << std::endl;
     }
-    uint sizeI = nodes->nodeMatrix.size();
-    uint sizeJ = nodes->nodeMatrix[0].size();
+    else
+    {
+        if (this->type == LOCAL_PLANNER)
+            std::cout << "PLANNER: goal node is not visible" << std::endl;
+    }
+    std::cout << "PLANNER: number of horizon nodes = " << narrowBand.size() << std::endl;
+    for (uint i = 0; i < narrowBand.size(); i++)
+    {
+    std::cout << "PLANNER: horizon node " << i << "with position (" << narrowBand[i]->pose.position[0] << "," << narrowBand[i]->pose.position[1];
+    std::cout << ") and work "<< narrowBand[i]->work << std::endl;
+    }
+    //uint sizeI = nodes->nodeMatrix.size();
+    //uint sizeJ = nodes->nodeMatrix[0].size();
 
     // HORIZON NODES
-    if (globalNodes != NULL)
+    /*if (globalNodes != NULL)
     {
         for (uint j = 0; j < sizeJ; j++)
         {
@@ -702,7 +731,7 @@ void PathPlanning::initNarrowBand(NodeMap * nodes, base::Waypoint wGoal, NodeMap
                         }
             }
         }
-    }
+    }*/
 }
 
 void PathPlanning::getHorizonCost(NodeMap* localMap, Node* horizonNode, NodeMap* globalMap)
@@ -729,7 +758,7 @@ void PathPlanning::getHorizonCost(NodeMap* localMap, Node* horizonNode, NodeMap*
     double w01 = node01->work;
     double w11 = node11->work;
 
-    horizonNode->work = w00 + (w10 - w00)*a + (w01 - w00)*b + (w11 + w00 - w10 - w01)*a*b;
+    horizonNode->work = w00 + (w01 - w00)*a + (w10 - w00)*b + (w11 + w00 - w10 - w01)*a*b;
     if (horizonNode->work < 0)
     {
         std::cout << "ERROR: Horizon Node " <<
@@ -752,7 +781,7 @@ void PathPlanning::getHorizonCost(NodeMap* localMap, Node* horizonNode, NodeMap*
 void PathPlanning::propagationFunction(Node* nodeTarget, double scale)
 {
   // (W-Wx)^2 + (W-Wy)^2 = (P+R)^2
-    double Wx,Wy,P,W,R;
+    double Wx,Wy,P,W,R,C;
     locomotionMode L;
   // Neighbor Propagators Wx and Wy
     if(((nodeTarget->nb4List[0] != NULL))&&((nodeTarget->nb4List[3] != NULL)))
@@ -777,7 +806,7 @@ void PathPlanning::propagationFunction(Node* nodeTarget, double scale)
         else
         {
           costFunction(1,P,L);
-          P = P/2;
+          //P = P/2;
         }
     }
     else
@@ -787,8 +816,11 @@ void PathPlanning::propagationFunction(Node* nodeTarget, double scale)
 
     double Co = 10;
     //double C = scale * (P + R * (Co - P));
-    double C = scale * P * (1 + R);
-
+    //double C = scale * P * (1 + R);
+    if(this->type == LOCAL_PLANNER)
+        C = 0.05*0.002;//scale*P*(1+R);
+    else
+        C = scale*P;
     if ((fabs(Wx-Wy)<C)&&(Wx < INF)&&(Wy < INF))
         W = (Wx+Wy+sqrt(2*pow(C,2.0) - pow((Wx-Wy),2.0)))/2;
     else
@@ -819,6 +851,17 @@ void PathPlanning::propagationFunction(Node* nodeTarget, double scale)
         nodeTarget->nodeLocMode = L;
         nodeTarget->power = P;
     }
+
+    if (nodeTarget->work == INF)
+    {
+        std::cout << "ERROR:Propagation on Node " <<
+          nodeTarget->pose.position[0] << "," <<
+          nodeTarget->pose.position[1] << ")" << std::endl;
+        std::cout << " - work = " << nodeTarget->work << std::endl;
+        std::cout << " - Wx =  " << Wx << std::endl;
+        std::cout << " - Wy =  " << Wy << std::endl;
+    }
+
 }
 
 
@@ -840,9 +883,10 @@ bool PathPlanning::getPath(NodeMap * nodes, double tau,
 
   //  cX = startPoint.position[0]; //Position to take into account when calculating heading for Wheel-walking waypoints
   //  cY = startPoint.position[1]; //Position to take into account when calculating heading for Wheel-walking waypoints
-
+    std::cout << "PLANNER: working with the path" << std::endl;
     base::Waypoint wNew;
-    if (!trajectory.empty())
+    //if (!trajectory.empty())
+    if(false)
     {
           std::cout<< "PLANNER: Repairing a trajectory of " << trajectory.size() << " waypoints"<<  std::endl;
           std::cout<< "PLANNER: Current Segment " << currentSegment <<  std::endl;
@@ -907,6 +951,8 @@ bool PathPlanning::getPath(NodeMap * nodes, double tau,
     }
     else
     {
+        std::cout << "PLANNER: trajectory is empty, starting from actual point" << std::endl;
+        trajectory.clear();
         startPoint = nodes->actualPose;
         calculateNextWaypoint(startPoint.position[0], startPoint.position[1], dCostX, dCostY, newH, locMode, nodes, risk);
         startPoint.position[2] = newH;
@@ -917,6 +963,7 @@ bool PathPlanning::getPath(NodeMap * nodes, double tau,
         //std::cout<< "Loc Mode inicial: "  << locVector.front() << std::endl;
         newX = trajectory.back().position[0];
         newY = trajectory.back().position[1];
+        std::cout << "PLANNER: trajectory initialized" << std::endl;
     }
 
 
@@ -934,7 +981,10 @@ bool PathPlanning::getPath(NodeMap * nodes, double tau,
 
         bool isNearHidden = calculateNextWaypoint(newX, newY, dCostX, dCostY, newH, locMode, nodes, risk);
         if (!isNearHidden)
+        {
+            std::cout<< "PLANNER: node (" << newX << "," << newY <<") is near hidden area"<< std::endl;
             return false;
+        }
         else
             wNew.position = Eigen::Vector3d(newX,newY,newH);
         dHeading = acos((normDCostX*dCostX + normDCostY*dCostY)/sqrt(pow(dCostX,2)+pow(dCostY,2)));
@@ -970,7 +1020,7 @@ bool PathPlanning::getPath(NodeMap * nodes, double tau,
         locVector.push_back(locMode);
 	      /*if (distance > 0.8)
 	          break;*/
-        if (trajectory.size()>999)
+        if (trajectory.size()>99)
         {
             std::cout<< "ERROR at node (" << newX << "," << newY <<")"<< std::endl;
             trajectory.back().position[0] = trajectory.back().position[0]*nodes->scale;
@@ -1086,11 +1136,15 @@ bool PathPlanning::calculateNextWaypoint(double x, double y, double& dCostX, dou
     Node * node11 = node00->nb4List[2]->nb4List[3];
 
 
-    if ((node00->state == HIDDEN)||(node01->state == HIDDEN)||
+/*    if ((node00->state == HIDDEN)||(node01->state == HIDDEN)||
         (node10->state == HIDDEN)||(node11->state == HIDDEN))
     {
         return false;
-    }/*
+    }*/
+    if ((isHorizon(node00))||(isHorizon(node01))||
+       (isHorizon(node10))||(isHorizon(node11)))
+        return false;
+    /*
     else
     {*/
         gradientNode( node00, gx00, gy00);
@@ -1126,4 +1180,12 @@ bool PathPlanning::calculateNextWaypoint(double x, double y, double& dCostX, dou
 double PathPlanning::interpolate(double a, double b, double g00, double g01, double g10, double g11)
 {
     return g00 + (g10 - g00)*a + (g01 - g00)*b + (g11 + g00 - g10 - g01)*a*b;
+}
+
+bool PathPlanning::isHorizon(Node* n)
+{
+    for (uint k = 0; k < 4; k++)
+        if ((n->nb4List[k] != NULL) && ((n->nb4List[k]->state == HIDDEN)))
+            return true;
+    return false;
 }

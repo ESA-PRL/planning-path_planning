@@ -83,6 +83,7 @@ namespace PathPlanning_lib
                                      double& dCostY, double& height,
                                      short int& locMode, NodeMap * nodes, double& risk);
             double interpolate(double a, double b, double g00, double g01, double g10, double g11);
+            bool isHorizon(Node* n);
     };
 
 } // end namespace motion_planning_libraries
