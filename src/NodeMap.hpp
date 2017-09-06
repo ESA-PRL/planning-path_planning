@@ -134,6 +134,7 @@ double aspect;
   {
       public:
           double scale;
+          double minWork;
           base::Time t1;
           base::Pose2D globalOffset;
           std::vector< std::vector<Node*> > nodeMatrix;
@@ -158,13 +159,18 @@ double aspect;
           void updateNodeMap(envire::TraversabilityGrid* travGrid);
           void makeNeighbourhood();
           void makeNeighbourhood(Node* n, uint i, uint j);
+          Node * getNeighbour(Node* n, uint k);
           void createLocalNodeMap(envire::TraversabilityGrid* travGrid);
           void hidAll();
-          bool updateVisibility(base::Waypoint wPos, NodeMap* globalMap);
+          bool updateVisibility(base::Waypoint wPos, NodeMap* globalMap, bool initializing);
           void setHorizonCost(Node* horizonNode, NodeMap* globalMap);
-          envire::ElevationGrid* getEnvirePropagation();
-          envire::TraversabilityGrid* getEnvireState();
-          void expandRisk(std::vector<Node*> expandableNodes);
+          envire::ElevationGrid* getEnvirePropagation(base::Waypoint wPos, bool crop);
+          envire::ElevationGrid* getEnvireRisk();
+          envire::TraversabilityGrid* getLocalEnvireState(base::Waypoint wPos, bool crop);
+          envire::TraversabilityGrid* getGlobalEnvireState();
+          void expandRisk(std::vector<Node*>& expandableNodes);
+          void propagateRisk(Node* nodeTarget, std::vector<Node*>& expandableNodes);
+          Node * maxRiskNode(std::vector<Node*>& expandableNodes);
           double getLocomotionMode(double x, double y);
   };
 } // end namespace motion_planning_libraries_nodemap

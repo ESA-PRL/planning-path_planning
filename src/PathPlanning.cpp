@@ -49,8 +49,8 @@ void PathPlanning::costFunction(uint Terrain, double& Power, locomotionMode& lM)
 	      //case 1: Power = 0.088; lM = DRIVING; break;
               //case 2: Power = 1.074; lM = WHEEL_WALKING; break;
 	      //case 2: Power = 0.236; lM = DRIVING; break;
-              case 1: Power = 0.1; lM = DRIVING; break;
-              case 2: Power = 0.2; lM = DRIVING; break;
+              case 1: Power = 0.088; lM = DRIVING; break;
+              case 2: Power = 0.236; lM = WHEEL_WALKING; break;
 	      //case 2: Power = 1.074; lM = DRIVING; break;
     }
 }
@@ -620,24 +620,42 @@ void PathPlanning::fastMarching(base::Waypoint wStart, base::Waypoint wGoal,
     if(this->type == LOCAL_PLANNER)
     {
         std::cout << "PLANNER: starting local propagation loop" << std::endl;
-        Node * node00 =
-            (nodes->getNode((uint)(wStart.position[0]/(nodes->scale)),
-            (uint)(wStart.position[1]/(nodes->scale))));
-        Node * node10 = node00->nb4List[2];
-        Node * node01 = node00->nb4List[3];
-        Node * node11 = node00->nb4List[2]->nb4List[3];
+
+        Node * node00 = nodes->nodeActualPos;
+            /*(nodes->getNode((uint)(wStart.position[0]/(nodes->scale)),
+            (uint)(wStart.position[1]/(nodes->scale))));*/
+        Node * nodeN0 = nodes->getNeighbour(node00,2);
+        Node * nodeN1 = nodes->getNeighbour(nodeN0,3);
+        Node * nodeN2 = nodes->getNeighbour(node00,3);
+        Node * nodeN3 = nodes->getNeighbour(nodeN2,1);
+        Node * nodeN4 = nodes->getNeighbour(node00,1);
+        Node * nodeN5 = nodes->getNeighbour(nodeN4,0);
+        Node * nodeN6 = nodes->getNeighbour(node00,0);
+        Node * nodeN7 = nodes->getNeighbour(nodeN6,2);
+
         std::cout<< "PLANNER: created LOCAL Final Nodes" << std::endl;
         if(node00->terrain == 0)
             std::cout << "PLANNER: rover is on obstacle area??" << std::endl;
         if(node00->state == HIDDEN)
             std::cout << "PLANNER: for some reason node00 is hidden... " << std::endl;
         std::cout << "PLANNER: node00 pose is " << node00->pose.position[0] << "," << node00->pose.position[1] << std::endl;
+        bool first_iteration = true;
         while ((node00->state != CLOSED)||
-               (node01->state != CLOSED)||
-               (node10->state != CLOSED)||
-               (node11->state != CLOSED))
+               (nodeN0->state != CLOSED)||
+               (nodeN1->state != CLOSED)||
+               (nodeN2->state != CLOSED)||
+               (nodeN3->state != CLOSED)||
+               (nodeN4->state != CLOSED)||
+               (nodeN5->state != CLOSED)||
+               (nodeN6->state != CLOSED)||
+               (nodeN7->state != CLOSED))
         {
             nodeTarget = minCostNode();
+            if (first_iteration)
+            {
+                first_iteration = false;
+                nodes->minWork = nodeTarget->work; 
+            }
             //std::cout << "PLANNER: next nodetarget is " << nodeTarget->pose.position[0] << "," << nodeTarget->pose.position[1] << std::endl;
             //std::cout << "PLANNER: with work  " << nodeTarget->work << std::endl;
             nodeTarget->state = CLOSED;
@@ -658,6 +676,7 @@ void PathPlanning::fastMarching(base::Waypoint wStart, base::Waypoint wGoal,
     else
     {
         std::cout<< "PLANNER: starting global propagation loop " << std::endl;
+        nodes->minWork = 0;
         Node * nodeFinal = nodes->getActualPos();
         if (nodeFinal->terrain == 0)
         {
@@ -703,11 +722,11 @@ void PathPlanning::initNarrowBand(NodeMap * nodes, base::Waypoint wGoal, NodeMap
             std::cout << "PLANNER: goal node is not visible" << std::endl;
     }
     std::cout << "PLANNER: number of horizon nodes = " << narrowBand.size() << std::endl;
-    for (uint i = 0; i < narrowBand.size(); i++)
+    /*for (uint i = 0; i < narrowBand.size(); i++)
     {
     std::cout << "PLANNER: horizon node " << i << "with position (" << narrowBand[i]->pose.position[0] << "," << narrowBand[i]->pose.position[1];
     std::cout << ") and work "<< narrowBand[i]->work << std::endl;
-    }
+    }*/
     //uint sizeI = nodes->nodeMatrix.size();
     //uint sizeJ = nodes->nodeMatrix[0].size();
 
@@ -818,30 +837,13 @@ void PathPlanning::propagationFunction(Node* nodeTarget, double scale)
     //double C = scale * (P + R * (Co - P));
     //double C = scale * P * (1 + R);
     if(this->type == LOCAL_PLANNER)
-        C = 0.05*0.002;//scale*P*(1+R);
+        C = scale*P*(1+9*R);//scale*P*(1+R);
     else
         C = scale*P;
     if ((fabs(Wx-Wy)<C)&&(Wx < INF)&&(Wy < INF))
         W = (Wx+Wy+sqrt(2*pow(C,2.0) - pow((Wx-Wy),2.0)))/2;
     else
         W = fmin(Wx,Wy) + C;
-
-    /*if (nodeTarget->state == NARROW)
-        if(W < nodeTarget->work)
-        {
-            nodeTarget->work = W;
-            nodeTarget->nodeLocMode = L;
-	    nodeTarget->power = P;
-        }
-
-    if (nodeTarget->state == FAR)
-    {
-        nodeTarget->state = NARROW;
-        nodeTarget->work = W;
-        nodeTarget->nodeLocMode = L;
-        nodeTarget->power = P;
-        this->narrowBand.push_back(nodeTarget);
-    }*/
 
     if(W < nodeTarget->work)
     {
