@@ -49,8 +49,9 @@ void PathPlanning::costFunction(uint Terrain, double& Power, locomotionMode& lM)
 	      //case 1: Power = 0.088; lM = DRIVING; break;
               //case 2: Power = 1.074; lM = WHEEL_WALKING; break;
 	      //case 2: Power = 0.236; lM = DRIVING; break;
-              case 1: Power = 0.088; lM = DRIVING; break;
-              case 2: Power = 0.236; lM = WHEEL_WALKING; break;
+         // SLOWNESS POWER
+              case 1: Power = 1/0.07; lM = DRIVING; break;
+              case 2: Power = 1/0.05; lM = WHEEL_WALKING; break;
 	      //case 2: Power = 1.074; lM = DRIVING; break;
     }
 }

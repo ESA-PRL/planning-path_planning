@@ -271,7 +271,6 @@ Node* NodeMap::getNode(uint i, uint j)
     return nodeMatrix[j][i];
 }
 
-
 // Simulation function
 void NodeMap::hidAll()
 {
@@ -616,7 +615,7 @@ Node* NodeMap::maxRiskNode(std::vector<Node*>& expandableNodes)
 }
 
 
-envire::ElevationGrid* NodeMap::getEnvirePropagation(base::Waypoint wPos, bool crop)
+envire::ElevationGrid* NodeMap::getEnvirePropagation(base::Waypoint wPos, bool crop, double work_scale)
 {
     if (crop)
     {
@@ -632,7 +631,7 @@ envire::ElevationGrid* NodeMap::getEnvirePropagation(base::Waypoint wPos, bool c
             for (uint i = 0; i < d-c; i++)
             {
                 if(nodeMatrix[j+a][i+c]->work != INF)
-                    elevGrid->get((double)(i)*scale,(double)(j)*scale) = (nodeMatrix[j+a][i+c]->work-minWork) / (nodeActualPos->work-minWork);
+                    elevGrid->get((double)(i)*scale,(double)(j)*scale) = (nodeMatrix[j+a][i+c]->work-minWork)/work_scale;// / (nodeActualPos->work-minWork);
                 else
                     elevGrid->get((double)(i)*scale,(double)(j)*scale) = 0;
             }
@@ -649,7 +648,7 @@ envire::ElevationGrid* NodeMap::getEnvirePropagation(base::Waypoint wPos, bool c
             for (uint i = 0; i < nodeMatrix[0].size(); i++)
             {
                 if(nodeMatrix[j][i]->work != INF)
-                    elevGrid->get((double)(i)*scale,(double)(j)*scale) = nodeMatrix[j][i]->work;// (nodeMatrix[j][i]->work-minWork) / (nodeActualPos->work-minWork);
+                    elevGrid->get((double)(i)*scale,(double)(j)*scale) = nodeMatrix[j][i]->work/work_scale;// (nodeMatrix[j][i]->work-minWork) / (nodeActualPos->work-minWork);
                 else
                     elevGrid->get((double)(i)*scale,(double)(j)*scale) = 0;
             }
@@ -802,4 +801,31 @@ double NodeMap::getLocomotionMode(double x, double y)
     //std::cout << "NodeLocModes: " << node00->nodeLocMode << "-" << node01->nodeLocMode << "-" << node10->nodeLocMode << "-" << node11->nodeLocMode << std::endl;
 
     return (double)floor((node00->nodeLocMode + node10->nodeLocMode + node01->nodeLocMode + node11->nodeLocMode)/4.0);
+}
+
+bool NodeMap::updateNodePower(double new_power, base::Waypoint wPos, bool value_inverted)
+{
+    wPos.position[0] = wPos.position[0]/(this->scale);
+    wPos.position[1] = wPos.position[1]/(this->scale);
+    uint scaledX = (uint)(wPos.position[0] + 0.5);
+    uint scaledY = (uint)(wPos.position[1] + 0.5);
+    Node * n = this->getNode(scaledX, scaledY);
+    if (value_inverted)
+        new_power = 1/new_power;
+    if (new_power > n->power)
+    {
+        n->power = new_power;
+        return true; //In this case, replanning of global is needed
+    }
+    return false; //Global replanning not needed
+}
+
+void NodeMap::resetHorizonNodes(NodeMap* globalMap)
+{
+    if (!horizonNodes.empty())
+    {
+        std::cout << "PLANNER: recalculating cost of "<< horizonNodes.size() << " horizon nodes" << std::endl;
+        for (uint i = 0; i < horizonNodes.size(); i++)
+            setHorizonCost(horizonNodes[i], globalMap);
+    }
 }
