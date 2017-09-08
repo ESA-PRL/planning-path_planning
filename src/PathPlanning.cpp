@@ -45,7 +45,7 @@ void PathPlanning::costFunction(uint Terrain, double& Power, locomotionMode& lM)
     // Here a Look-Up Table should be built
     switch(Terrain)
     {
-	      case 0: Power = 10.0;   lM = DRIVING; break;
+	      case 0: Power = 1000.0;   lM = DRIVING; break;
 	      //case 1: Power = 0.088; lM = DRIVING; break;
               //case 2: Power = 1.074; lM = WHEEL_WALKING; break;
 	      //case 2: Power = 0.236; lM = DRIVING; break;
@@ -691,7 +691,10 @@ void PathPlanning::fastMarching(base::Waypoint wStart, base::Waypoint wGoal,
             for (uint i = 0; i<4; i++)
                 if ((nodeTarget->nb4List[i] != NULL) &&
                     (nodeTarget->nb4List[i]->state == OPEN))
-                    propagationFunction(nodeTarget->nb4List[i], nodes->scale);
+                    {
+                        propagationFunction(nodeTarget->nb4List[i], nodes->scale);
+                        nodes->closedNodes.push_back(nodeTarget->nb4List[i]);
+                    }
         }
         std::cout<< "Fast Marching: ended global propagation loop" << std::endl;
     }
@@ -830,7 +833,20 @@ void PathPlanning::propagationFunction(Node* nodeTarget, double scale)
         }
     }
     else
-        costFunction(nodeTarget->terrain,P,L);
+    {
+        if (nodeTarget->slip_ratio == 1)
+        {
+            costFunction(0,P,L);
+            std::cout << "PLANNER: the slip ratio is 1, global node is an obstacle" << std::endl;
+        }
+        else
+        {
+            costFunction(nodeTarget->terrain,P,L);
+            P = P/(1-nodeTarget->slip_ratio);
+            if(nodeTarget->slip_ratio != 0)
+                std::cout << "PLANNER: propagating through node (" << nodeTarget->pose.position[0] << ", " << nodeTarget->pose.position[1] << ") with slip " << nodeTarget->slip_ratio << " and new cost " << P << std::endl;
+        }
+    }
 
     R = nodeTarget->risk.obstacle;
 

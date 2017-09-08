@@ -332,7 +332,7 @@ bool NodeMap::updateVisibility(base::Waypoint wPos, NodeMap* globalMap, bool ini
                 alpha = acos((dx*cos(wPos.heading) + dy*sin(wPos.heading))/sqrt(pow(dx,2) + pow(dy,2)));
                 if (initializing)
                 {
-                    if ((sqrt(pow(dx,2) + pow(dy,2)) < 0.6)&&(nodeTarget->state == HIDDEN))
+                    if ((sqrt(pow(dx,2) + pow(dy,2)) < 0.7)&&(nodeTarget->state == HIDDEN))
                     {
                         flag = true;
                         nodeTarget->state = OPEN;
@@ -819,6 +819,29 @@ bool NodeMap::updateNodePower(double new_power, base::Waypoint wPos, bool value_
     }
     return false; //Global replanning not needed
 }
+
+bool NodeMap::updateNodeSlip(double dSlip, base::Waypoint wPos)
+{
+    wPos.position[0] = wPos.position[0]/(this->scale);
+    wPos.position[1] = wPos.position[1]/(this->scale);
+    uint scaledX = (uint)(wPos.position[0] + 0.5);
+    uint scaledY = (uint)(wPos.position[1] + 0.5);
+    Node * n = this->getNode(scaledX, scaledY);
+    
+    std::cout << "PLANNER: Updating Node " <<
+          n->pose.position[0] << "," <<
+          n->pose.position[1] << ")" << std::endl;
+
+    if (dSlip > n->slip_ratio)
+    {
+        std::cout << "PLANNER: previous slip ratio was " << n->slip_ratio << " and new slip ratio is " << dSlip << std::endl;
+        n->slip_ratio = dSlip;
+        return true; //In this case, replanning of global is needed
+    }
+    std::cout << "PLANNER: new slip ratio is lower than the previous one, no update" << std::endl;
+    return false; //Global replanning not needed
+}
+
 
 void NodeMap::resetHorizonNodes(NodeMap* globalMap)
 {

@@ -79,7 +79,7 @@ double slip;
         double key[2];
         double power;
         double work;
-
+        double slip_ratio;
         double cost;
         double dCostX;
         double dCostY;
@@ -119,6 +119,7 @@ double aspect;
           //risk.obstacle = r_;
           risk.obstacle = 0;
           power = 0;
+          slip_ratio = 0;
           work = INF;
           rhs = 0;
           g = INF;
@@ -174,6 +175,7 @@ double aspect;
           Node * maxRiskNode(std::vector<Node*>& expandableNodes);
           double getLocomotionMode(double x, double y);
           bool updateNodePower(double new_power, base::Waypoint wPos, bool value_inverted);
+          bool updateNodeSlip(double dSlip, base::Waypoint wPos);
           void resetHorizonNodes(NodeMap* globalMap);
   };
 } // end namespace motion_planning_libraries_nodemap
