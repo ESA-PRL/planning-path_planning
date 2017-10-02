@@ -48,26 +48,6 @@ namespace PathPlanning_lib
 	          void initTerrainList(std::vector< std::vector<double> > soils);
 	          void costFunction(uint Terrain, double& Power, locomotionMode& lM);
 
-          // Field D Star Functions
-            void fieldDStar(base::Waypoint wStart, base::Waypoint wGoal,
-                            std::vector<base::Waypoint>& trajectory,
-                            std::vector< short int >& locVector,
-                            NodeMap * nodes);
-            void getInterpolatedPath(Node * nodeStart, base::Waypoint wGoal,
-                                     NodeMap nodes, double tau,
-                                     std::vector<base::Waypoint>& trajectory,
-                                     std::vector< short int >& locVector);
-            void setKey(Node * nodeTarget, base::Waypoint wStart);
-            double getHeuristic(Node * nodeTarget, base::Waypoint wStart);
-            Node * getMinorKey( Node * nodeA, Node * nodeB);
-            void updateState(Node * nodeTarget, Node * nodeGoal,
-                             base::Waypoint wStart, std::list<Node*>& openList);
-            void computeCost(Node * nodeTarget, double& di, double& dj,
-                             double& cost);
-            void costInterpolation(double g1, double g2, uint cTerrain,
-                                   uint bTerrain, double di, double dj,
-                                   double& dk, double& vs);
-
           // Fast Marching Functions
             void fastMarching(base::Waypoint wStart, base::Waypoint wGoal,
                               NodeMap * nodes, NodeMap * globalNodes);
