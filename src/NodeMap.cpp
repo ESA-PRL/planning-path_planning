@@ -80,18 +80,20 @@ NodeMap::NodeMap(double size, base::Pose2D pos,
 {
     t1 = base::Time::now();
     scale = size;
-    std::cout<<"Creating nodemap with scale " << scale << " m" << std::endl;
+    std::cout<<"PLANNER: Creating nodemap using scale " << scale << " m" << std::endl;
     globalOffset = pos;
     std::vector<Node*> nodeRow;
-    for (uint j = 0; j < elevation.size(); j++)
+    double numNodes = cost.size()*cost[0].size();
+    uint i,j;
+    for (j = 0; j < cost.size(); j++)
     {
-        for (uint i = 0; i < elevation[0].size(); i++)
+        for (i = 0; i < cost[0].size(); i++)
             nodeRow.push_back(new Node(i, j, elevation[j][i], cost[j][i], state));
         nodeMatrix.push_back(nodeRow);
         nodeRow.clear();
-        //std::cout << "PLANNER: row number " << j << std::endl;
+        std::cout << "PLANNER: loaded " << ((i+1)*(j+1)/numNodes)*100 << " %" <<std::endl;
     }
-    std::cout<<"NodeMap created in " << (base::Time::now()-t1) << " s" << std::endl;
+    std::cout<<"NodeMap of "<< nodeMatrix[0].size() << " x " << nodeMatrix.size() << " nodes created in " << (base::Time::now()-t1) << " s" << std::endl;
 }
 
 void NodeMap::makeNeighbourhood()
@@ -118,29 +120,9 @@ void NodeMap::makeNeighbourhood()
           nodeMatrix[j][i]->nb4List.push_back(getNode(i-1,j));
           nodeMatrix[j][i]->nb4List.push_back(getNode(i+1,j));
           nodeMatrix[j][i]->nb4List.push_back(getNode(i,j+1));
-
-
-  //                 8 - Neighbourhood
-  //       nb4List[3] __ nb4List[2] __ nb4List[1]
-  //       (i-1, j+1) __  (i, j+1)  __ (i+1, j+1)
-  //           ||            ||            ||
-  //       nb4List[4] __   target   __ nb4List[0]
-  //        (i-1, j)  __   (i, j)   __  (i+1, j)
-  //           ||            ||            ||
-  //       nb4List[5] __ nb4List[6] __ nb4List[7]
-  //       (i-1, j-1) __  (i, j-1)  __ (i+1, j-1)
-
-          /*nodeMatrix[j][i]->nb8List.push_back(getNode(i+1,j));
-          nodeMatrix[j][i]->nb8List.push_back(getNode(i+1,j+1));
-          nodeMatrix[j][i]->nb8List.push_back(getNode(i,  j+1));
-          nodeMatrix[j][i]->nb8List.push_back(getNode(i-1,j+1));
-          nodeMatrix[j][i]->nb8List.push_back(getNode(i-1,j));
-          nodeMatrix[j][i]->nb8List.push_back(getNode(i-1,j-1));
-          nodeMatrix[j][i]->nb8List.push_back(getNode(i,  j-1));
-          nodeMatrix[j][i]->nb8List.push_back(getNode(i+1,j-1));*/
       }
   }
-    std::cout<<"4 - Neighbourhood made in " << (base::Time::now()-t1) << " s" << std::endl;
+    std::cout<<"PLANNER: 4 - Neighbourhood made in " << (base::Time::now()-t1) << " s" << std::endl;
 }
 
 void NodeMap::makeNeighbourhood(Node* n, uint i, uint j)
@@ -210,7 +192,7 @@ void NodeMap::resetPropagation()
         for (uint i = 0; i < closedNodes.size(); i++)
         {
             closedNodes[i]->state = OPEN;
-            closedNodes[i]->work = INF;
+            closedNodes[i]->total_cost = INF;
         }
         closedNodes.clear();
     }
@@ -281,6 +263,11 @@ void NodeMap::hidAll()
 }
 
 
+bool NodeMap::isObstacle(Node* n)
+{
+    return n->isObstacle;
+}
+
 // Simulation function
 bool NodeMap::updateVisibility(base::Waypoint wPos, NodeMap* globalMap, bool initializing)
 {
@@ -332,7 +319,7 @@ bool NodeMap::updateVisibility(base::Waypoint wPos, NodeMap* globalMap, bool ini
                 alpha = acos((dx*cos(wPos.heading) + dy*sin(wPos.heading))/sqrt(pow(dx,2) + pow(dy,2)));
                 if (initializing)
                 {
-                    if ((sqrt(pow(dx,2) + pow(dy,2)) < 0.7)&&(nodeTarget->state == HIDDEN))
+                    if ((sqrt(pow(dx,2) + pow(dy,2)) < 3.0)&&(nodeTarget->state == HIDDEN))
                     {
                         flag = true;
                         nodeTarget->state = OPEN;
@@ -397,7 +384,7 @@ bool NodeMap::updateVisibility(base::Waypoint wPos, NodeMap* globalMap, bool ini
                 }
                 if(!isHorizon)
                 {
-                    horizonNodes[i]->work = INF;
+                    horizonNodes[i]->total_cost = INF;
                     horizonNodes[i]->state = OPEN;
                     horizonNodes.erase(horizonNodes.begin() + i);
                     //isHorizon = false;
@@ -411,7 +398,7 @@ bool NodeMap::updateVisibility(base::Waypoint wPos, NodeMap* globalMap, bool ini
             }
             if(!isHorizon)
             {
-                horizonNodes[0]->work = INF;
+                horizonNodes[0]->total_cost = INF;
                 horizonNodes[0]->state = OPEN;
                 horizonNodes.erase(horizonNodes.begin());
                 //isHorizon = false;
@@ -465,18 +452,18 @@ void NodeMap::setHorizonCost(Node* horizonNode, NodeMap* globalMap)
     Node * node01 = node00->nb4List[3];
     Node * node11 = node00->nb4List[2]->nb4List[3];
 
-    double w00 = node00->work;
-    double w10 = node10->work;
-    double w01 = node01->work;
-    double w11 = node11->work;
+    double w00 = node00->total_cost;
+    double w10 = node10->total_cost;
+    double w01 = node01->total_cost;
+    double w11 = node11->total_cost;
 
-    horizonNode->work = w00 + (w10 - w00)*a + (w01 - w00)*b + (w11 + w00 - w10 - w01)*a*b;
-    if ((horizonNode->work < 0)||(horizonNode->work == INF))
+    horizonNode->total_cost = w00 + (w10 - w00)*a + (w01 - w00)*b + (w11 + w00 - w10 - w01)*a*b;
+    if ((horizonNode->total_cost < 0)||(horizonNode->total_cost == INF))
     {
         std::cout << "ERROR: Horizon Node " <<
           horizonNode->pose.position[0] << "," <<
           horizonNode->pose.position[1] << ")" << std::endl;
-        std::cout << " - work = " << horizonNode->work << std::endl;
+        std::cout << " - total_cost = " << horizonNode->total_cost << std::endl;
         std::cout << " - w00 =  " << w00 << std::endl;
         std::cout << " - w10 =  " << w10 << std::endl;
         std::cout << " - w01 =  " << w01 << std::endl;
@@ -630,8 +617,8 @@ envire::ElevationGrid* NodeMap::getEnvirePropagation(base::Waypoint wPos, bool c
         {
             for (uint i = 0; i < d-c; i++)
             {
-                if(nodeMatrix[j+a][i+c]->work != INF)
-                    elevGrid->get((double)(i)*scale,(double)(j)*scale) = (nodeMatrix[j+a][i+c]->work-minWork)/work_scale;// / (nodeActualPos->work-minWork);
+                if(nodeMatrix[j+a][i+c]->total_cost != INF)
+                    elevGrid->get((double)(i)*scale,(double)(j)*scale) = (nodeMatrix[j+a][i+c]->total_cost-minWork)/work_scale;// / (nodeActualPos->work-minWork);
                 else
                     elevGrid->get((double)(i)*scale,(double)(j)*scale) = 0;
             }
@@ -647,8 +634,8 @@ envire::ElevationGrid* NodeMap::getEnvirePropagation(base::Waypoint wPos, bool c
         {
             for (uint i = 0; i < nodeMatrix[0].size(); i++)
             {
-                if(nodeMatrix[j][i]->work != INF)
-                    elevGrid->get((double)(i)*scale,(double)(j)*scale) = nodeMatrix[j][i]->work/work_scale;// (nodeMatrix[j][i]->work-minWork) / (nodeActualPos->work-minWork);
+                if(nodeMatrix[j][i]->total_cost != INF)
+                    elevGrid->get((double)(i)*scale,(double)(j)*scale) = nodeMatrix[j][i]->total_cost/work_scale;// (nodeMatrix[j][i]->work-minWork) / (nodeActualPos->work-minWork);
                 else
                     elevGrid->get((double)(i)*scale,(double)(j)*scale) = 0;
             }
@@ -667,7 +654,7 @@ envire::ElevationGrid* NodeMap::getEnvireRisk()
     {
         for (uint i = 0; i < nodeMatrix[0].size(); i++)
         {
-            if(nodeMatrix[j][i]->work != INF)
+            if(nodeMatrix[j][i]->total_cost != INF)
                 elevGrid->get((double)(i)*scale,(double)(j)*scale) = nodeMatrix[j][i]->risk.obstacle;
             else
                 elevGrid->get((double)(i)*scale,(double)(j)*scale) = nodeMatrix[j][i]->risk.obstacle;
@@ -786,26 +773,19 @@ envire::TraversabilityGrid* NodeMap::getLocalEnvireState(base::Waypoint wPos, bo
     }
 }
 
-double NodeMap::getLocomotionMode(double x, double y)
+std::string NodeMap::getLocomotionMode(base::Waypoint wPos)
 {
-    uint i = (uint)(x);
-    uint j = (uint)(y);
-    double a = x - (double)(i);
-    double b = y - (double)(j);
-
-    Node * node00 = getNode(i, j);
-    Node * node10 = node00->nb4List[2];
-    Node * node01 = node00->nb4List[3];
-    Node * node11 = node00->nb4List[2]->nb4List[3];
-
-    //std::cout << "NodeLocModes: " << node00->nodeLocMode << "-" << node01->nodeLocMode << "-" << node10->nodeLocMode << "-" << node11->nodeLocMode << std::endl;
-
-    return (double)floor((node00->nodeLocMode + node10->nodeLocMode + node01->nodeLocMode + node11->nodeLocMode)/4.0);
+    wPos.position[0] = wPos.position[0]/(this->scale);
+    wPos.position[1] = wPos.position[1]/(this->scale);
+    uint scaledX = (uint)(wPos.position[0] + 0.5);
+    uint scaledY = (uint)(wPos.position[1] + 0.5);
+    Node * n = this->getNode(scaledX, scaledY);
+    return n->nodeLocMode;
 }
 
 bool NodeMap::updateNodePower(double new_power, base::Waypoint wPos, bool value_inverted)
 {
-    wPos.position[0] = wPos.position[0]/(this->scale);
+    /*wPos.position[0] = wPos.position[0]/(this->scale);
     wPos.position[1] = wPos.position[1]/(this->scale);
     uint scaledX = (uint)(wPos.position[0] + 0.5);
     uint scaledY = (uint)(wPos.position[1] + 0.5);
@@ -816,7 +796,7 @@ bool NodeMap::updateNodePower(double new_power, base::Waypoint wPos, bool value_
     {
         n->power = new_power;
         return true; //In this case, replanning of global is needed
-    }
+    }*/
     return false; //Global replanning not needed
 }
 
@@ -827,7 +807,7 @@ bool NodeMap::updateNodeSlip(double dSlip, base::Waypoint wPos)
     uint scaledX = (uint)(wPos.position[0] + 0.5);
     uint scaledY = (uint)(wPos.position[1] + 0.5);
     Node * n = this->getNode(scaledX, scaledY);
-    
+
     std::cout << "PLANNER: Updating Node " <<
           n->pose.position[0] << "," <<
           n->pose.position[1] << ")" << std::endl;

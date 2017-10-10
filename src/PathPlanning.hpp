@@ -36,32 +36,30 @@ namespace PathPlanning_lib
             double pathCost;
             plannerType type;
         public:
-            PathPlanning(plannerType _type);
+            PathPlanning(plannerType _type, std::vector< terrainType* > _table);
             ~PathPlanning();
             bool setStartNode(base::Waypoint wStart);
             std::vector< std::vector<unsigned int*> > costMap;
 	          std::vector< std::vector<double*> > riskMap;
-	          std::vector< soilType* > terrainList;
+            std::vector< terrainType* > costTable;
             std::vector<Node*> narrowBand;
             base::Time t1;
 
-	          void initTerrainList(std::vector< std::vector<double> > soils);
 	          void costFunction(uint Terrain, double& Power, locomotionMode& lM);
 
           // Fast Marching Functions
-            void fastMarching(base::Waypoint wStart, base::Waypoint wGoal,
-                              NodeMap * nodes, NodeMap * globalNodes);
-            void initNarrowBand(NodeMap * nodes, base::Waypoint wGoal, NodeMap * globalNodes);
+            void fastMarching(base::Waypoint wGoal, NodeMap * nodes);
+            void fastMarching(base::Waypoint wGoal, NodeMap * nodes,
+                              NodeMap * globalNodes, base::Waypoint wStart);
+            void initNarrowBand(NodeMap * nodes, base::Waypoint wGoal);
             void getHorizonCost(NodeMap* localMap, Node* horizonNode, NodeMap* globalMap);
-            void propagationFunction(Node* nodeTarget, double scale);
+            void scalarPropagation(Node* nodeTarget, double scale);
             bool getPath(NodeMap * nodes, double tau,
- 					                     std::vector<base::Waypoint>& trajectory,
-                               std::vector< short int >& locVector, int currentSegment);
+ 					                     std::vector<base::Waypoint>& trajectory);
             Node* minCostNode();
             void gradientNode(Node* nodeTarget, double& dx, double& dy);
             bool calculateNextWaypoint(double x, double y, double& dCostX,
-                                     double& dCostY, double& height,
-                                     short int& locMode, NodeMap * nodes, double& risk);
+                                     double& dCostY, double& height, NodeMap * nodes, double& risk);
             double interpolate(double a, double b, double g00, double g01, double g10, double g11);
             bool isHorizon(Node* n);
     };

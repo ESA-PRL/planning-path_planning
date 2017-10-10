@@ -36,13 +36,6 @@ namespace PathPlanning_lib
       HORIZONTAL
   };
 
-  enum terrainType
-  {//Must be external
-      OBSTACLE_SOIL,
-      LOOSE_SOIL,
-      COMPACT_SOIL
-  };
-
   enum nodeState
   {
       OPEN,
@@ -58,53 +51,39 @@ namespace PathPlanning_lib
       double uncertainty;
   };
 
-  struct soilType
+  struct terrainType
   {
-double friction;
-double slip;
+      double cost;
+      std::string optimalLM;
   };
 
     struct Node {
       //Node Parameters
         base::Pose2D pose; // X-Y-heading
         double slope;
+        double aspect;
         double elevation;
         riskProperties risk;
         nodeState state;
         base::samples::RigidBodyState roverPose;
         Node *nodeParent;
         unsigned int terrain; //Index to terrainList
-        double g;
-        double rhs;
-        double key[2];
-        double power;
-        double work;
+        //terrainType terrain;
+        bool isObstacle;
+        double total_cost;
         double slip_ratio;
-        double cost;
+        double cost_modifier;
         double dCostX;
         double dCostY;
         double heuristicCost;//for A*
         std::vector<Node*> nb8List; //8-neighbour nodes List
         std::vector<Node*> nb4List; //4-Neighbourhood List
         std::vector< std::vector<Node*> >* localNodeMatrix;
-
-double distanceCost;
-double headingCost;
-double materialCost;
-double riskCost;
-
-//Rover parameters
-double heading;
-double roll;
-double pitch;
-locomotionMode nodeLocMode;
-
-double aspect;
+        std::string nodeLocMode;
 
 
       Node()
       {
-          cost = INF;
           state = OPEN;
           nodeParent = NULL;
       }
@@ -118,17 +97,13 @@ double aspect;
           elevation = e_;
           //risk.obstacle = r_;
           risk.obstacle = 0;
-          power = 0;
+          isObstacle = false;
           slip_ratio = 0;
-          work = INF;
-          rhs = 0;
-          g = INF;
-          key[0] = INF;
-          key[1] = INF;
+          total_cost = INF;
           state = s_;
           nodeParent = NULL;
           localNodeMatrix = NULL;
-          nodeLocMode = DRIVING;
+          nodeLocMode = "DRIVING";
       }
   };
 
@@ -164,6 +139,7 @@ double aspect;
           Node * getNeighbour(Node* n, uint k);
           void createLocalNodeMap(envire::TraversabilityGrid* travGrid);
           void hidAll();
+          bool isObstacle(Node* n);
           bool updateVisibility(base::Waypoint wPos, NodeMap* globalMap, bool initializing);
           void setHorizonCost(Node* horizonNode, NodeMap* globalMap);
           envire::ElevationGrid* getEnvirePropagation(base::Waypoint wPos, bool crop, double work_scale);
@@ -173,7 +149,7 @@ double aspect;
           void expandRisk(std::vector<Node*>& expandableNodes);
           void propagateRisk(Node* nodeTarget, std::vector<Node*>& expandableNodes);
           Node * maxRiskNode(std::vector<Node*>& expandableNodes);
-          double getLocomotionMode(double x, double y);
+          std::string getLocomotionMode(base::Waypoint wPos);
           bool updateNodePower(double new_power, base::Waypoint wPos, bool value_inverted);
           bool updateNodeSlip(double dSlip, base::Waypoint wPos);
           void resetHorizonNodes(NodeMap* globalMap);
