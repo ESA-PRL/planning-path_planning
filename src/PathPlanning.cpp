@@ -874,7 +874,7 @@ bool PathPlanning::getPath(base::Waypoint wPos, double tau,
     std::cout << "PLANNER: trajectory initialized" << std::endl;
 
     while(sqrt(pow((trajectory.back().position[0] - sinkPoint.position[0]),2) +
-             pow((trajectory.back().position[1] - sinkPoint.position[1]),2)) > (2*tau))
+             pow((trajectory.back().position[1] - sinkPoint.position[1]),2)) > (2*tau*local_scale))
     {
         newWaypoint = calculateNextWaypoint(wPos, tau*local_scale);
         if (newWaypoint)
