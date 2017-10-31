@@ -137,6 +137,7 @@ void PathPlanning::calculateGlobalPropagation()
     global_narrowBand.clear();
     global_narrowBand.push_back(global_goalNode);
     global_goalNode->total_cost = 0;
+    global_goalNode->nodeLocMode = terrainTable[global_goalNode->terrain]->optimalLM;
     globalNode * nodeTarget;
     t1 = base::Time::now();
     std::cout<< "PLANNER: starting global propagation loop " << std::endl;
