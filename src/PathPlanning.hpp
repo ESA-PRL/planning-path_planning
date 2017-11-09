@@ -106,9 +106,9 @@ namespace PathPlanning_lib
             base::samples::RigidBodyState mStartPose;
             double pathCost;
             std::vector< std::vector<globalNode*> > globalMap;
-            double global_scale;
+            double global_cellSize;
             base::Pose2D global_offset;
-            double local_scale;
+            double local_cellSize;
             uint ratio_scale;
             globalNode* actualGlobalNodePos;
         public:
@@ -129,7 +129,7 @@ namespace PathPlanning_lib
 
             base::Time t1;
 
-            void initGlobalMap(double gScale, uint ratio,
+            void initGlobalMap(double globalCellSize,  double localCellSize,
                                base::Pose2D offset,
                                std::vector< std::vector<double> > elevation,
                                std::vector< std::vector<double> > cost);
@@ -164,7 +164,7 @@ namespace PathPlanning_lib
             globalNode* getNearestGlobalNode(base::Vector2d pos);
             globalNode* getNearestGlobalNode(base::Waypoint wPos);
 
-            void loadLocalArea(base::Waypoint wPos);
+            void updateLocalMap(base::Waypoint wPos);
 
             void expandRisk();
 

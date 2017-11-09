@@ -17,18 +17,20 @@ PathPlanning::~PathPlanning()
 }
 
 
-void PathPlanning::initGlobalMap(double gScale, uint ratio, base::Pose2D offset,
-        std::vector< std::vector<double> > elevation,
-        std::vector< std::vector<double> > cost)
+void PathPlanning::initGlobalMap(double globalCellSize,  double localCellSize,
+                                 base::Pose2D offset,
+                                 std::vector< std::vector<double> > elevation,
+                                 std::vector< std::vector<double> > cost)
 {
     t1 = base::Time::now();
-    global_scale = gScale;
-    ratio_scale = ratio;
-    local_scale = global_scale/(double)ratio;
+    global_cellSize = globalCellSize;
+    local_cellSize = localCellSize;
+    ratio_scale = (uint)(global_cellSize/local_cellSize);
+
     std::cout << "PLANNER: Creating Global Map using scale " <<
-                 global_scale << " m" << std::endl;
+                 global_cellSize << " m" << std::endl;
     std::cout << "PLANNER: Each global edge is composed by " <<
-                 ratio_scale << " local nodes, having a local resolution of " << local_scale << " m" << std::endl;
+                 ratio_scale << " local nodes, having a local resolution of " << local_cellSize << " m" << std::endl;
     global_offset = offset;
     std::vector<globalNode*> nodeRow;
     uint i,j;
@@ -38,8 +40,8 @@ void PathPlanning::initGlobalMap(double gScale, uint ratio, base::Pose2D offset,
         {
             nodeRow.push_back(new globalNode(i, j, elevation[j][i],
                                            cost[j][i]));
-            nodeRow.back()->world_pose.position[0] = i*global_scale;
-            nodeRow.back()->world_pose.position[1] = j*global_scale;
+            nodeRow.back()->world_pose.position[0] = i*global_cellSize;
+            nodeRow.back()->world_pose.position[1] = j*global_cellSize;
         }
         globalMap.push_back(nodeRow);
         nodeRow.clear();
@@ -77,9 +79,13 @@ void PathPlanning::initGlobalMap(double gScale, uint ratio, base::Pose2D offset,
               << " s" << std::endl;
 
   // SLOPE AND ASPECT
+    printf("PLANNER: Calculating Slope and Aspect values\n");
+    t1 = base::Time::now();
     for (j = 0; j < globalMap.size(); j++)
         for (i = 0; i < globalMap[0].size(); i++)
             calculateSlope(globalMap[j][i]);
+    std::cout << "PLANNER: Slope and Aspect calculated in " << (base::Time::now()-t1)
+              << " s" << std::endl;
 }
 
 globalNode* PathPlanning::getGlobalNode(uint i, uint j)
@@ -114,15 +120,15 @@ void PathPlanning::calculateSlope(globalNode* nodeTarget)
                   nodeTarget->nb4List[0]->elevation)*0.5;
     }
     nodeTarget->slope = sqrt(pow(dx,2)+pow(dy,2));
-    nodeTarget->aspect.x() = dx/sqrt(pow(dx,2)+pow(dy,2));
-    nodeTarget->aspect.y() = dy/sqrt(pow(dx,2)+pow(dy,2));
+    nodeTarget->aspect.x() = -dx/nodeTarget->slope;
+    nodeTarget->aspect.y() = -dy/nodeTarget->slope;
 }
 
 
 void PathPlanning::setGoal(base::Waypoint wGoal)
 {
-    wGoal.position[0] = wGoal.position[0]/global_scale;
-    wGoal.position[1] = wGoal.position[1]/global_scale;
+    wGoal.position[0] = wGoal.position[0]/global_cellSize;
+    wGoal.position[1] = wGoal.position[1]/global_cellSize;
     uint scaledX = (uint)(wGoal.position[0] + 0.5);
     uint scaledY = (uint)(wGoal.position[1] + 0.5);
     global_goalNode = getGlobalNode(scaledX, scaledY);
@@ -175,7 +181,7 @@ void PathPlanning::propagateGlobalNode(globalNode* nodeTarget)
         Tx = nodeTarget->nb4List[1]->total_cost;
 
   //Cost Function to obtain optimal power and locomotion mode
-    C = global_scale*(terrainTable[nodeTarget->terrain]->cost);
+    C = global_cellSize*(terrainTable[nodeTarget->terrain]->cost);
 
   // Eikonal Equation
     if ((fabs(Tx-Ty)<C)&&(Tx < INF)&&(Ty < INF))
@@ -218,15 +224,15 @@ envire::ElevationGrid* PathPlanning::getEnvireGlobalPropagation()
     std::cout<< "PLANNER: building elevation grid for representing total global cost" << std::endl;
     envire::ElevationGrid* elevGrid = new envire::ElevationGrid(
     globalMap[0].size(), globalMap.size(),
-    global_scale, global_scale);
+    global_cellSize, global_cellSize);
     for (uint j = 0; j < globalMap.size(); j++)
     {
         for (uint i = 0; i < globalMap[0].size(); i++)
         {
-            if(globalMap[j][i]->total_cost < 20) //Threshold here!!
-                elevGrid->get((double)(i)*global_scale,(double)(j)*global_scale) = globalMap[j][i]->total_cost;// (nodeMatrix[j][i]->work-minWork) / (nodeActualPos->work-minWork);
+            if((globalMap[j][i]->total_cost < 20) && (globalMap[j][i]->total_cost > 0)) //Threshold here!!
+                elevGrid->get((double)(i)*global_cellSize,(double)(j)*global_cellSize) = globalMap[j][i]->total_cost;// (nodeMatrix[j][i]->work-minWork) / (nodeActualPos->work-minWork);
             else
-                elevGrid->get((double)(i)*global_scale,(double)(j)*global_scale) = 0;
+                elevGrid->get((double)(i)*global_cellSize,(double)(j)*global_cellSize) = 0;
         }
     }
     std::cout<< "PLANNER: elevation grid built" << std::endl;
@@ -250,8 +256,8 @@ void PathPlanning::createLocalMap(globalNode* gNode)
                 nodeRow.back()->parent_pose.position[1] - 0.5 +
                 (0.5/(double)ratio_scale) +
                 nodeRow.back()->pose.position[1]*(1/(double)ratio_scale);
-            nodeRow.back()->world_pose.position[0] = nodeRow.back()->global_pose.position[0]/global_scale;
-            nodeRow.back()->world_pose.position[1] = nodeRow.back()->global_pose.position[1]/global_scale;
+            nodeRow.back()->world_pose.position[0] = nodeRow.back()->global_pose.position[0]/global_cellSize;
+            nodeRow.back()->world_pose.position[1] = nodeRow.back()->global_pose.position[1]/global_cellSize;
         }
         gNode->localMap.push_back(nodeRow);
         nodeRow.clear();
@@ -384,10 +390,10 @@ localNode* PathPlanning::getLocalNode(base::Vector2d pos)
     globalNode* nearestNode = getNearestGlobalNode(pos);
     //std::cout<< "PLANNER: NearestNode is " << nearestNode->pose.position[0] << ", " << nearestNode->pose.position[1] << std::endl;
 
-    double cornerX = nearestNode->pose.position[0] - global_scale/2;
-    double cornerY = nearestNode->pose.position[1] - global_scale/2;
-    double a = fmod(pos.x()/global_scale, cornerX);
-    double b = fmod(pos.y()/global_scale, cornerY);
+    double cornerX = nearestNode->pose.position[0] - global_cellSize/2;
+    double cornerY = nearestNode->pose.position[1] - global_cellSize/2;
+    double a = fmod(pos.x()/global_cellSize, cornerX);
+    double b = fmod(pos.y()/global_cellSize, cornerY);
     //std::cout<< "PLANNER: a = " << a << ", b = " << b << std::endl;
     return nearestNode->localMap[(uint)(b*ratio_scale)][(uint)(a*ratio_scale)];
 }
@@ -399,35 +405,35 @@ localNode* PathPlanning::getLocalNode(base::Waypoint wPos)
     globalNode* nearestNode = getNearestGlobalNode(wPos);
     //std::cout<< "PLANNER: NearestNode is " << nearestNode->pose.position[0] << ", " << nearestNode->pose.position[1] << std::endl;
 
-    double cornerX = nearestNode->pose.position[0] - global_scale/2;
-    double cornerY = nearestNode->pose.position[1] - global_scale/2;
-    double a = fmod(wPos.position[0]/global_scale, cornerX);
-    double b = fmod(wPos.position[1]/global_scale, cornerY);
+    double cornerX = nearestNode->pose.position[0] - global_cellSize/2;
+    double cornerY = nearestNode->pose.position[1] - global_cellSize/2;
+    double a = fmod(wPos.position[0]/global_cellSize, cornerX);
+    double b = fmod(wPos.position[1]/global_cellSize, cornerY);
     //std::cout<< "PLANNER: a = " << a << ", b = " << b << std::endl;
     return nearestNode->localMap[(uint)(b*ratio_scale)][(uint)(a*ratio_scale)];
 }
 
 globalNode* PathPlanning::getNearestGlobalNode(base::Vector2d pos)
 {
-    return getGlobalNode((uint)(pos.x()/global_scale + 0.5), (uint)(pos.y()/global_scale + 0.5));
+    return getGlobalNode((uint)(pos.x()/global_cellSize + 0.5), (uint)(pos.y()/global_cellSize + 0.5));
 }
 
 globalNode* PathPlanning::getNearestGlobalNode(base::Waypoint wPos)
 {
-    return getGlobalNode((uint)(wPos.position[0]/global_scale + 0.5), (uint)(wPos.position[1]/global_scale + 0.5));
+    return getGlobalNode((uint)(wPos.position[0]/global_cellSize + 0.5), (uint)(wPos.position[1]/global_cellSize + 0.5));
 }
 
-void PathPlanning::loadLocalArea(base::Waypoint wPos)
+void PathPlanning::updateLocalMap(base::Waypoint wPos)
 {
     globalNode* nearestNode = getNearestGlobalNode(wPos);
     if (actualGlobalNodePos != nearestNode)
     {
         actualGlobalNodePos = nearestNode;
         std::cout << "PLANNER: Building new local maps" << std::endl;
-        uint a = (uint)(fmax(0,((wPos.position[1] - 6.0)/global_scale)));
-        uint b = (uint)(fmin(globalMap.size(),((wPos.position[1] + 6.0)/global_scale)));
-        uint c = (uint)(fmax(0,((wPos.position[0] - 6.0)/global_scale)));
-        uint d = (uint)(fmin(globalMap[0].size(),((wPos.position[0]  + 6.0)/global_scale)));
+        uint a = (uint)(fmax(0,((wPos.position[1] - 6.0)/global_cellSize)));
+        uint b = (uint)(fmin(globalMap.size(),((wPos.position[1] + 6.0)/global_cellSize)));
+        uint c = (uint)(fmax(0,((wPos.position[0] - 6.0)/global_cellSize)));
+        uint d = (uint)(fmin(globalMap[0].size(),((wPos.position[0]  + 6.0)/global_cellSize)));
         for (uint j = a; j < b; j++)
             for (uint i = c; i < d; i++)
                 expandGlobalNode(globalMap[j][i]);
@@ -648,7 +654,7 @@ envire::TraversabilityGrid* PathPlanning::getEnvireLocalState(base::Waypoint wPo
 
     envire::TraversabilityGrid* travGrid = new envire::TraversabilityGrid(
         ratio_scale*(1+d-c), ratio_scale*(1+b-a),
-        local_scale, local_scale, (double)(c)*global_scale, (double)(a)*global_scale);
+        local_cellSize, local_cellSize, (double)(c)*global_cellSize, (double)(a)*global_cellSize);
 
     std::cout << "PLANNER: travGrid created" << std::endl;
     for (uint j = 0; j <= b-a; j++)
@@ -689,13 +695,13 @@ envire::ElevationGrid* PathPlanning::getEnvireRisk(base::Waypoint wPos)
     uint d = (uint)(fmin(globalMap[0].size(),wPos.position[0] + 4.0+0.5));
     envire::ElevationGrid* riskGrid = new envire::ElevationGrid(
         ratio_scale*(1+d-c), ratio_scale*(1+b-a),
-        local_scale, local_scale);
+        local_cellSize, local_cellSize);
     for (uint j = 0; j <= b-a; j++)
         for (uint i = 0; i <= d-c; i++)
             for (uint l = 0; l < ratio_scale; l++)
                 for (uint k = 0; k < ratio_scale; k++)
-                    riskGrid->get(((double)(k + ratio_scale*i))*local_scale,
-                                  ((double)(l + ratio_scale*j))*local_scale) =
+                    riskGrid->get(((double)(k + ratio_scale*i))*local_cellSize,
+                                  ((double)(l + ratio_scale*j))*local_cellSize) =
                                   globalMap[j+a][i+c]->localMap[l][k]->risk;
     return riskGrid;
 }
@@ -708,7 +714,7 @@ envire::ElevationGrid* PathPlanning::getLocalTotalCost(base::Waypoint wPos)
     uint d = (uint)(fmin(globalMap[0].size(),wPos.position[0] + 4.0+0.5));
     envire::ElevationGrid* totalCostGrid = new envire::ElevationGrid(
         ratio_scale*(1+d-c), ratio_scale*(1+b-a),
-        local_scale, local_scale);
+        local_cellSize, local_cellSize);
     double totalCost;
     for (uint j = 0; j <= b-a; j++)
         for (uint i = 0; i <= d-c; i++)
@@ -717,11 +723,11 @@ envire::ElevationGrid* PathPlanning::getLocalTotalCost(base::Waypoint wPos)
                 {
                     totalCost = globalMap[j+a][i+c]->localMap[l][k]->total_cost;
                     if (totalCost == INF)
-                        totalCostGrid->get(((double)(k + ratio_scale*i))*local_scale,
-                                  ((double)(l + ratio_scale*j))*local_scale) = 0;
+                        totalCostGrid->get(((double)(k + ratio_scale*i))*local_cellSize,
+                                  ((double)(l + ratio_scale*j))*local_cellSize) = 0;
                     else
-                        totalCostGrid->get(((double)(k + ratio_scale*i))*local_scale,
-                              ((double)(l + ratio_scale*j))*local_scale) = totalCost;
+                        totalCostGrid->get(((double)(k + ratio_scale*i))*local_cellSize,
+                              ((double)(l + ratio_scale*j))*local_cellSize) = totalCost;
                 }
 
     return totalCostGrid;
@@ -738,6 +744,7 @@ void PathPlanning::calculateLocalPropagation(base::Waypoint wGoal, base::Waypoin
     local_narrowBand = horizonNodes;
     if(global_goalNode->hasLocalMap)
     {
+        std::cout << "PLANNER: global_goalNode size of local map = " << global_goalNode->localMap.size() << " x " << global_goalNode->localMap[0].size() << std::endl;
         local_goalNode = global_goalNode->localMap[ratio_scale/2][ratio_scale/2];
         if (local_goalNode->state != HID)
         {
@@ -764,13 +771,21 @@ void PathPlanning::calculateLocalPropagation(base::Waypoint wGoal, base::Waypoin
     local_actualPose = getLocalNode(wPos);
 
     localNode * nodeN0 = local_actualPose->nb4List[2];
+    std::cout<< "PLANNER: nodeN0 is " << nodeN0->pose.position[0] << "," << nodeN0->pose.position[1] << " with state = " << nodeN0->state << std::endl;
     localNode * nodeN1 = nodeN0->nb4List[3];
+    std::cout<< "PLANNER: nodeN1 is " << nodeN1->pose.position[0] << "," << nodeN1->pose.position[1] << " with state = " << nodeN1->state << std::endl;
     localNode * nodeN2 = local_actualPose->nb4List[3];
+    std::cout<< "PLANNER: nodeN2 is " << nodeN2->pose.position[0] << "," << nodeN2->pose.position[1] << " with state = " << nodeN2->state << std::endl;
     localNode * nodeN3 = nodeN2->nb4List[1];
+    std::cout<< "PLANNER: nodeN3 is " << nodeN3->pose.position[0] << "," << nodeN3->pose.position[1] << " with state = " << nodeN3->state << std::endl;
     localNode * nodeN4 = local_actualPose->nb4List[1];
+    std::cout<< "PLANNER: nodeN4 is " << nodeN4->pose.position[0] << "," << nodeN4->pose.position[1] << " with state = " << nodeN4->state << std::endl;
     localNode * nodeN5 = nodeN4->nb4List[0];
+    std::cout<< "PLANNER: nodeN5 is " << nodeN5->pose.position[0] << "," << nodeN5->pose.position[1] << " with state = " << nodeN5->state << std::endl;
     localNode * nodeN6 = local_actualPose->nb4List[0];
+    std::cout<< "PLANNER: nodeN6 is " << nodeN6->pose.position[0] << "," << nodeN6->pose.position[1] << " with state = " << nodeN6->state << std::endl;
     localNode * nodeN7 = nodeN6->nb4List[2];
+    std::cout<< "PLANNER: nodeN7 is " << nodeN7->pose.position[0] << "," << nodeN7->pose.position[1] << " with state = " << nodeN7->state << std::endl;
 
     std::cout << "PLANNER: local neighbours defined" << std::endl;
 
@@ -786,13 +801,20 @@ void PathPlanning::calculateLocalPropagation(base::Waypoint wGoal, base::Waypoin
     {
             nodeTarget = minCostLocalNode();
             nodeTarget->state = TRAVERSABLE_CLOSED;
+            /*if (nodeTarget == local_actualPose)
+                std::cout << "PLANNER: now considering actualPose" << std::endl;*/
+            //std::cout<< "PLANNER: next nodeTarget is " << nodeTarget->pose.position[0] << "," << nodeTarget->pose.position[1] << std::endl;
             for (uint i = 0; i<4; i++)
+            {
+                if (nodeTarget->nb4List[i] == NULL)
+                    std::cout<< "PLANNER: nodeTarget " << nodeTarget->pose.position[0] << "," << nodeTarget->pose.position[1] << "has a null neighbour " << i << std::endl;
                 if ((nodeTarget->nb4List[i] != NULL) &&
                     (nodeTarget->nb4List[i]->state == TRAVERSABLE_OPEN))
                 {
                     propagateLocalNode(nodeTarget->nb4List[i]);
                     local_closedNodes.push_back(nodeTarget->nb4List[i]);//To later erase total cost value of non close nodes as well!!!
                 }
+            }
     }
     std::cout<< "PLANNER: ended local propagation loop" << std::endl;
     t1 = base::Time::now() - t1;
@@ -821,9 +843,9 @@ void PathPlanning::propagateLocalNode(localNode* nodeTarget)
   //Cost Function to obtain optimal power and locomotion mode
     R = nodeTarget->risk;
     if (nodeTarget->state == OBSTACLE)
-        C = local_scale*(terrainTable[0]->cost)*(1+9*R);
+        C = local_cellSize*(terrainTable[0]->cost)*(1+9*R);
     else
-        C = local_scale*(terrainTable[1]->cost)*(1+9*R);  //TODO: Change this
+        C = local_cellSize*(terrainTable[1]->cost)*(1+9*R)/2;  //TODO: Change this
 
   // Eikonal Equation
     if ((fabs(Tx-Ty)<C)&&(Tx < INF)&&(Ty < INF))
@@ -845,7 +867,7 @@ localNode* PathPlanning::minCostLocalNode()
     uint index = 0;
     uint i;
     double minCost = local_narrowBand.front()->total_cost;
-    //std::cout << "Size of Narrow Band is: " << this->narrowBand.size() << std::endl;
+    //std::cout << "PLANNER: Size of Narrow Band is: " << local_narrowBand.size() << std::endl;
     for (i =0; i < local_narrowBand.size(); i++)
     {
         if (local_narrowBand[i]->total_cost < minCost)
@@ -875,9 +897,9 @@ bool PathPlanning::getPath(base::Waypoint wPos, double tau,
     std::cout << "PLANNER: trajectory initialized" << std::endl;
 
     while(sqrt(pow((trajectory.back().position[0] - sinkPoint.position[0]),2) +
-             pow((trajectory.back().position[1] - sinkPoint.position[1]),2)) > (2*tau*local_scale))
+             pow((trajectory.back().position[1] - sinkPoint.position[1]),2)) > (2*tau*local_cellSize))
     {
-        newWaypoint = calculateNextWaypoint(wPos, tau*local_scale);
+        newWaypoint = calculateNextWaypoint(wPos, tau*local_cellSize);
         if (newWaypoint)
             trajectory.push_back(wPos);
         else
@@ -915,8 +937,8 @@ bool PathPlanning::calculateNextWaypoint(base::Waypoint& wPos, double tau)
             node10 = lNode->nb4List[2];
             node01 = lNode->nb4List[3];
             node11 = lNode->nb4List[2]->nb4List[3];
-            a = (wPos.position[0] - lNode->world_pose.position[0])/local_scale;
-            b = (wPos.position[1] - lNode->world_pose.position[1])/local_scale;
+            a = (wPos.position[0] - lNode->world_pose.position[0])/local_cellSize;
+            b = (wPos.position[1] - lNode->world_pose.position[1])/local_cellSize;
         }
         else
         {
@@ -924,8 +946,8 @@ bool PathPlanning::calculateNextWaypoint(base::Waypoint& wPos, double tau)
             node10 = lNode->nb4List[2];
             node01 = lNode;
             node11 = lNode->nb4List[0]->nb4List[2];
-            a = (wPos.position[0] - lNode->world_pose.position[0])/local_scale;
-            b = 1+(wPos.position[1] - lNode->world_pose.position[1])/local_scale;
+            a = (wPos.position[0] - lNode->world_pose.position[0])/local_cellSize;
+            b = 1+(wPos.position[1] - lNode->world_pose.position[1])/local_cellSize;
         }
     }
     else
@@ -936,8 +958,8 @@ bool PathPlanning::calculateNextWaypoint(base::Waypoint& wPos, double tau)
             node10 = lNode;
             node01 = lNode->nb4List[3];
             node11 = lNode->nb4List[3]->nb4List[1];
-            a = 1+(wPos.position[0] - lNode->world_pose.position[0])/local_scale;
-            b = (wPos.position[1] - lNode->world_pose.position[1])/local_scale;
+            a = 1+(wPos.position[0] - lNode->world_pose.position[0])/local_cellSize;
+            b = (wPos.position[1] - lNode->world_pose.position[1])/local_cellSize;
         }
         else
         {
@@ -945,8 +967,8 @@ bool PathPlanning::calculateNextWaypoint(base::Waypoint& wPos, double tau)
             node10 = lNode->nb4List[0];
             node01 = lNode->nb4List[1];
             node11 = lNode;
-            a = 1+(wPos.position[0] - lNode->world_pose.position[0])/local_scale;
-            b = 1+(wPos.position[1] - lNode->world_pose.position[1])/local_scale;
+            a = 1+(wPos.position[0] - lNode->world_pose.position[0])/local_cellSize;
+            b = 1+(wPos.position[1] - lNode->world_pose.position[1])/local_cellSize;
         }
     }
 
