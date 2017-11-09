@@ -163,6 +163,142 @@ void PathPlanning::calculateGlobalPropagation()
 
 void PathPlanning::propagateGlobalNode(globalNode* nodeTarget)
 {
+    double Tx,Ty,T,C, aspect_x, aspect_y;
+    std::string L;
+
+  // Neighbor Propagators Tx and Ty
+    if(((nodeTarget->nb4List[0] != NULL))&&((nodeTarget->nb4List[3] != NULL)))
+    {
+        if (nodeTarget->nb4List[3]->total_cost < nodeTarget->nb4List[0]->total_cost)
+        {
+            Ty = nodeTarget->nb4List[3]->total_cost;
+            aspect_y = - nodeTarget->aspect.y();
+        }
+        else
+        {
+            Ty = nodeTarget->nb4List[0]->total_cost;
+            aspect_y = nodeTarget->aspect.y();
+        }
+    }
+    else if (nodeTarget->nb4List[0] == NULL)
+    {
+        Ty = nodeTarget->nb4List[3]->total_cost;
+        aspect_y = - nodeTarget->aspect.y();
+    }
+    else
+    {
+        Ty = nodeTarget->nb4List[0]->total_cost;
+        aspect_y = nodeTarget->aspect.y();
+    }
+
+
+    if(((nodeTarget->nb4List[1] != NULL))&&((nodeTarget->nb4List[2] != NULL)))
+        if (nodeTarget->nb4List[2]->total_cost < nodeTarget->nb4List[1]->total_cost)
+        {
+             Tx = nodeTarget->nb4List[2]->total_cost;
+             aspect_x = - nodeTarget->aspect.x();
+        }
+        else
+        {
+            Tx = nodeTarget->nb4List[1]->total_cost;
+            aspect_x = nodeTarget->aspect.x();
+        }
+    else if (nodeTarget->nb4List[1] == NULL)
+    {
+        Tx = nodeTarget->nb4List[2]->total_cost;
+        aspect_x = - nodeTarget->aspect.x();
+    }
+    else
+    {
+        Tx = nodeTarget->nb4List[1]->total_cost;
+        aspect_x = nodeTarget->aspect.x();
+    }
+
+
+  //Cost Function to obtain optimal power and locomotion mode
+    double C0, Cs, Cv, beta, deltaW, ref, error, Cmax;
+
+    C0 = global_cellSize*(terrainTable[nodeTarget->terrain]->cost);
+    Cs = C0/cos(nodeTarget->slope);
+
+    Cv = 2*Cs; //TODO: this has to be an input
+
+    C = Cv;
+
+    deltaW = std::abs(Tx-Ty);
+
+
+  // Equation
+
+
+
+
+
+
+        if (nodeTarget->slope == 0)
+        { // Scalar Case -> Eikonal Equation
+            if ((fabs(Tx-Ty)<C)&&(Tx < INF)&&(Ty < INF))
+                T = (Tx+Ty+sqrt(2*pow(C,2.0) - pow((Tx-Ty),2.0)))/2;
+            else
+                T = fmin(Tx,Ty) + C;
+        }
+        else
+        { // Vectorial Case -> Hamilton Jacobi Equation
+            if (Ty > Tx)
+            {
+                Cmax = Cs + Cv*(1-aspect_x)/2;
+                beta = atan2(aspect_y, aspect_x);
+            }
+            else
+            {
+                Cmax = Cs + Cv*(1-aspect_y)/2;
+                beta = atan2(aspect_x, aspect_y);
+            }
+            if (Cmax <= deltaW)
+            {
+                T = std::min(Tx,Ty) + Cmax;
+            }
+            else
+            {
+                if (beta >= 0)
+                {
+                    ref = deltaW/Cmax;
+                    C = Cs + Cv*(1-cos(beta-ref*M_PI/4))/2;
+                    error = C*(cos(ref*M_PI/4)-sin(ref*M_PI/4))/Cmax - deltaW/Cmax;
+                    while(std::abs(error) > 0.0001)
+                    {
+                        ref += error/2;
+                        C = Cs + Cv*(1-cos(beta-ref*M_PI/4))/2;
+                        error = C*(cos(ref*M_PI/4)-sin(ref*M_PI/4))/Cmax - deltaW/Cmax;
+                    }
+                }
+                else
+                {
+                    ref = deltaW/Cmax;
+                    C = Cs + Cv*(1-cos(-beta+ref*M_PI/4))/2;
+                    error = C*(cos(ref*M_PI/4)-sin(ref*M_PI/4))/Cmax - deltaW/Cmax;
+                    while(std::abs(error) > 0.0001)
+                    {
+                        ref += error/2;
+                        C = Cs + Cv*(1-cos(-beta+ref*M_PI/4))/2;
+                        error = C*(cos(ref*M_PI/4)-sin(ref*M_PI/4))/Cmax - deltaW/Cmax;
+                    }
+                }
+                T = (Tx+Ty+sqrt(2*pow(C,2.0) - pow((Tx-Ty),2.0)))/2;
+           }
+    }
+
+    if(T < nodeTarget->total_cost)
+    {
+        if (nodeTarget->total_cost == INF) //It is not in narrowband
+            global_narrowBand.push_back(nodeTarget);
+        nodeTarget->total_cost = T;
+        nodeTarget->nodeLocMode = terrainTable[nodeTarget->terrain]->optimalLM;
+    }
+}
+
+/*void PathPlanning::propagateGlobalNode(globalNode* nodeTarget)
+{
     double Tx,Ty,T,C;
     std::string L;
   // Neighbor Propagators Tx and Ty
@@ -196,8 +332,7 @@ void PathPlanning::propagateGlobalNode(globalNode* nodeTarget)
         nodeTarget->total_cost = T;
         nodeTarget->nodeLocMode = terrainTable[nodeTarget->terrain]->optimalLM;
     }
-
-}
+}*/
 
 globalNode* PathPlanning::minCostGlobalNode()
 {
@@ -465,7 +600,8 @@ bool PathPlanning::simUpdateVisibility(base::Waypoint wPos, std::vector< std::ve
                 alpha = acos((dx*cos(wPos.heading) + dy*sin(wPos.heading))/sqrt(pow(dx,2) + pow(dy,2)));
             else
                 alpha = acos((dx*cos(camHeading) + dy*sin(camHeading))/sqrt(pow(dx,2) + pow(dy,2)));
-            if (initializing)
+            //if (initializing)
+            if(true)
             {
                 if (sqrt(pow(dx,2) + pow(dy,2)) < 3.0)
                 {
