@@ -1124,7 +1124,7 @@ bool PathPlanning::calculateNextWaypoint(base::Waypoint& wPos, double tau)
     wPos.position[1] = wPos.position[1] - tau*dCostY/sqrt(pow(dCostX,2) + pow(dCostY,2));
     wPos.heading = atan2(-dCostY,-dCostX);
 
-    if ((isnan(wPos.position[0]))||(isnan(wPos.position[1])))
+    if ((std::isnan(wPos.position[0]))||(std::isnan(wPos.position[1])))
         return false;
     return true;
 }
