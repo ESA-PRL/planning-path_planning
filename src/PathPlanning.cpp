@@ -161,7 +161,7 @@ void PathPlanning::calculateGlobalPropagation()
     std::cout<<"Computation Time: " << t1 <<std::endl;
 }
 
-void PathPlanning::propagateGlobalNode(globalNode* nodeTarget)
+/*void PathPlanning::propagateGlobalNode(globalNode* nodeTarget)
 {
     double Tx,Ty,T,C, aspect_x, aspect_y;
     std::string L;
@@ -295,9 +295,9 @@ void PathPlanning::propagateGlobalNode(globalNode* nodeTarget)
         nodeTarget->total_cost = T;
         nodeTarget->nodeLocMode = terrainTable[nodeTarget->terrain]->optimalLM;
     }
-}
+}*/
 
-/*void PathPlanning::propagateGlobalNode(globalNode* nodeTarget)
+void PathPlanning::propagateGlobalNode(globalNode* nodeTarget)
 {
     double Tx,Ty,T,C;
     std::string L;
@@ -332,7 +332,7 @@ void PathPlanning::propagateGlobalNode(globalNode* nodeTarget)
         nodeTarget->total_cost = T;
         nodeTarget->nodeLocMode = terrainTable[nodeTarget->terrain]->optimalLM;
     }
-}*/
+}
 
 globalNode* PathPlanning::minCostGlobalNode()
 {
