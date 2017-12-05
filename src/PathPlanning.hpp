@@ -23,15 +23,15 @@ namespace envire {
 
 namespace PathPlanning_lib
 {
-    enum local_state
+    /*enum local_state
     {
         HID,
         OBSTACLE,
         TRAVERSABLE_OPEN,
         TRAVERSABLE_CLOSED
-    };
+    };*/
 
-    enum global_state
+    enum node_state
     {
         OPEN,
         CLOSED,
@@ -53,7 +53,7 @@ namespace PathPlanning_lib
         double total_cost;
         double cost;
         double risk;
-        local_state state;
+        node_state state;
         std::vector<localNode*> nb4List;
         bool isObstacle;
         localNode(uint x_, uint y_, base::Pose2D _parent_pose)
@@ -61,7 +61,7 @@ namespace PathPlanning_lib
             pose.position[0] = (double)x_;
             pose.position[1] = (double)y_;
             parent_pose = _parent_pose;
-            state = HID;
+            state = OPEN;
             risk = 0;
             total_cost = INF;
             isObstacle = false;
@@ -75,13 +75,15 @@ namespace PathPlanning_lib
         double elevation;
         double slope;
         base::Vector2d aspect;
-        global_state state;
+        node_state state;
         bool isObstacle;
         bool hasLocalMap; //Has it localmap?
+        double cost;
         double total_cost;
         unsigned int terrain;
         std::vector< std::vector<localNode*> > localMap;
         std::vector<globalNode*> nb4List;
+        std::vector<globalNode*> nb8List;
         std::string nodeLocMode;
         globalNode(uint x_, uint y_, double e_, double c_)
         {
@@ -119,10 +121,14 @@ namespace PathPlanning_lib
 	          std::vector< std::vector<double*> > riskMap;
             std::vector< terrainType* > terrainTable;
             std::vector<globalNode*> global_narrowBand;
+            std::vector<globalNode*> global_propagatedNodes;
             std::vector<localNode*> local_narrowBand;
             std::vector<localNode*> localExpandableObstacles;
             std::vector<localNode*> horizonNodes;
             std::vector<localNode*> local_closedNodes;
+            std::vector<base::Waypoint> trajectory;
+            std::vector<bool> isGlobalWaypoint;
+
             globalNode * global_goalNode;
             localNode * local_goalNode;
             localNode * local_actualPose;
@@ -140,7 +146,9 @@ namespace PathPlanning_lib
 
             void setGoal(base::Waypoint wGoal);
 
-            void calculateGlobalPropagation();
+            void calculateGlobalPropagation(base::Waypoint wPos);
+
+            void calculateNominalCost(globalNode* nodeTarget);
 
             globalNode* minCostGlobalNode();
 
@@ -152,19 +160,24 @@ namespace PathPlanning_lib
 
             void createLocalMap(globalNode* gNode);
 
-            localNode* introducePixelInMap(base::Vector2d pos, local_state state, bool& newVisible);
+            localNode* introducePixelInMap(base::Vector2d pos, bool& newVisible, std::vector<base::Waypoint>& trajectory);
 
             localNode* getLocalNode(base::Vector2d pos);
             localNode* getLocalNode(base::Waypoint wPos);
 
             void expandGlobalNode(globalNode* gNode);
 
-            bool simUpdateVisibility(base::Waypoint wPos, std::vector< std::vector<double> >& costMatrix, double res, bool initializing, double camHeading);
+            bool simUpdateVisibility(base::Waypoint wPos, std::vector< std::vector<double> >& costMatrix, double res, bool initializing, double camHeading, std::vector<base::Waypoint>& trajectory);
 
             globalNode* getNearestGlobalNode(base::Vector2d pos);
             globalNode* getNearestGlobalNode(base::Waypoint wPos);
 
             void updateLocalMap(base::Waypoint wPos);
+
+            bool evaluateLocalMap(base::Waypoint wPos,
+                                  std::vector< std::vector<double> >& costMatrix,
+                                  double res,
+                                  std::vector<base::Waypoint>& trajectory);
 
             void expandRisk();
 
@@ -178,21 +191,31 @@ namespace PathPlanning_lib
 
             void setHorizonCost(localNode* horizonNode);
 
-            void calculateLocalPropagation(base::Waypoint wGoal, base::Waypoint wPos);
+            double getInterpolatedCost(localNode* lNode);
 
-            void propagateLocalNode(localNode* nodeTarget);
+            localNode * calculateLocalPropagation(base::Waypoint wInit, base::Waypoint wDest);
+
+            bool propagateLocalNode(localNode* nodeTarget, double Tcatch, double Tstart);
 
             localNode* minCostLocalNode();
 
-            bool getPath(base::Waypoint wStart, double tau, std::vector<base::Waypoint>& trajectory);
+            std::vector<base::Waypoint> getLocalPath(localNode * lSetNode,
+                                                     base::Waypoint wInit,
+                                                     double tau);
+            std::vector<base::Waypoint> getGlobalPath(base::Waypoint wPos,
+                                                      double tau);
 
             bool calculateNextWaypoint(base::Waypoint& wPos, double tau);
+            base::Waypoint calculateNextGlobalWaypoint(base::Waypoint& wPos, double tau);
 
             void gradientNode(localNode* nodeTarget, double& dnx, double& dny);
+            void gradientNode(globalNode* nodeTarget, double& dnx, double& dny);
 
             double interpolate(double a, double b, double g00, double g01, double g10, double g11);
 
             std::string getLocomotionMode(base::Waypoint wPos);
+
+            bool evaluatePath(localNode* lObs, std::vector<base::Waypoint>& trajectory, uint& maxIndex, uint& minIndex);
 
             bool isHorizon(localNode* lNode);
     };
