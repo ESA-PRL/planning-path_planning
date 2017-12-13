@@ -3,6 +3,7 @@
 
 #include <base/samples/RigidBodyState.hpp>
 #include <base/samples/DistanceImage.hpp>
+#include <base/samples/Frame.hpp>
 #include <base/Waypoint.hpp>
 #include <base/Trajectory.hpp>
 #include <vector>
@@ -63,7 +64,7 @@ namespace PathPlanning_lib
         base::Pose2D world_pose;
         double elevation;
         double slope;
-        base::Vector2d aspect;
+        double aspect;
         node_state state;
         bool isObstacle;
         bool hasLocalMap; //Has it localmap?
@@ -151,7 +152,7 @@ namespace PathPlanning_lib
 
             void calculateNominalCost(globalNode* nodeTarget);
 
-            void calculateBaseCost(globalNode* nodeTarget);
+            void calculateSmoothCost(globalNode* nodeTarget);
 
             globalNode* minCostGlobalNode();
 
@@ -181,6 +182,11 @@ namespace PathPlanning_lib
 
             bool evaluateLocalMap(base::Waypoint wPos,
                                   std::vector< std::vector<double> >& costMatrix,
+                                  double res,
+                                  std::vector<base::Waypoint>& trajectory);
+
+            bool evaluateLocalMap(base::Waypoint wPos,
+                                  base::samples::frame::Frame traversabilityMap,
                                   double res,
                                   std::vector<base::Waypoint>& trajectory);
 
@@ -223,11 +229,13 @@ namespace PathPlanning_lib
 
             std::string getLocomotionMode(base::Waypoint wPos);
 
-            bool evaluatePath(std::vector<base::Waypoint>& trajectory, uint& maxIndex, uint& minIndex);
+            void evaluatePath(std::vector<base::Waypoint>& trajectory);
 
             bool isHorizon(localNode* lNode);
 
             bool isBlockingObstacle(localNode* obNode, uint& maxIndex, uint& minIndex);
+
+            void repairPath(std::vector<base::Waypoint>& trajectory, uint minIndex, uint maxIndex);
     };
 
 } // end namespace motion_planning_libraries
