@@ -1403,6 +1403,12 @@ std::vector<base::Waypoint> PathPlanning::getGlobalPath(base::Waypoint wPos)
       double tau = std::min(0.5,risk_distance);
       wNext = calculateNextGlobalWaypoint(wPos, tau*global_cellSize);
       trajectory.push_back(wPos);
+  
+      if ((wPos.position[0] == wNext.position[0]) && (wPos.position[1] == wNext.position[1])) {
+          std::cout << "PLANNER: ERROR in calculated global waypoint. wNext calculated is the same as initial pos." << std::endl;
+          return trajectory;
+      }
+  
       wPos = wNext;
       std::cout << "PLANNER: trajectory initialized with tau = " << tau << std::endl;
 
