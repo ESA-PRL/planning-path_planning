@@ -178,7 +178,7 @@ namespace PathPlanning_lib
             globalNode* getNearestGlobalNode(base::Pose2D pos);
             globalNode* getNearestGlobalNode(base::Waypoint wPos);
 
-            void updateLocalMap(base::Waypoint wPos);
+            void expandLocalMap(base::Waypoint wPos);
 
             bool evaluateLocalMap(base::Waypoint wPos,
                                   std::vector< std::vector<double> >& costMatrix,

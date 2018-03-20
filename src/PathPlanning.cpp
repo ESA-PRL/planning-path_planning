@@ -602,7 +602,7 @@ globalNode* PathPlanning::getNearestGlobalNode(base::Waypoint wPos)
     return getGlobalNode((uint)(wPos.position[0]/global_cellSize + 0.5), (uint)(wPos.position[1]/global_cellSize + 0.5));
 }
 
-void PathPlanning::updateLocalMap(base::Waypoint wPos)
+void PathPlanning::expandLocalMap(base::Waypoint wPos)
 {
     globalNode* nearestNode = getNearestGlobalNode(wPos);
     if (actualGlobalNodePos != nearestNode)
@@ -642,7 +642,6 @@ bool PathPlanning::evaluateLocalMap(base::Waypoint wPos,
     {
         for (uint i = 0; i < traversabilityMap.getWidth(); i++)
         {
-            //if (initializing)
             base::Pose2D pos;
             pos.position[0] = offsetX + i*local_cellSize;
             pos.position[1] = offsetY + j*local_cellSize;
@@ -804,68 +803,6 @@ bool PathPlanning::evaluateLocalMap(base::Waypoint wPos,
         repairPath(trajectory, minIndex, maxIndex);
         return true;
     }
-    /*if(minIndex < globalPath.size())
-    {
-        std::cout << "PLANNER: trajectory from waypoint " << minIndex << " to waypoint " << maxIndex << " must be repaired" << std::endl;
-        expandRisk();
-
-        for(uint i = minIndex; i>0;i--)
-        {
-            if (sqrt(
-                  pow(globalPath[i].position[0]-globalPath[minIndex].position[0],2)
-                + pow(globalPath[i].position[1]-globalPath[minIndex].position[1],2)
-              ) > 2*risk_distance)
-            {
-                indexLim = i;
-                break;
-            }
-        }
-
-        if(maxIndex == globalPath.size()) //This means last waypoint is on forbidden area
-        {
-            globalPath.resize(indexLim+1);
-            for(uint i = 0; i<trajectory.size(); i++)
-            {
-                if ((trajectory[i].position[0] == globalPath.back().position[0])&&
-                    (trajectory[i].position[1] == globalPath.back().position[1])&&
-                    (trajectory[i].heading == globalPath.back().heading))
-                {
-                    trajectory.resize(i+1);
-                    break;
-                }
-            }
-            std::cout << "PLANNER: trajectory is shortened due to goal placed on forbidden area" << std::endl;
-            return true;
-        }
-
-        double Treach = getInterpolatedCost(globalPath[maxIndex]);
-        //Resize trajectory to eliminate non safe part of the trajectory
-        globalPath.resize(indexLim+1);
-        //Resize as well the globalPath pointers
-        for(uint i = 0; i<trajectory.size(); i++)
-        {
-            if ((trajectory[i].position[0] == globalPath.back().position[0])&&
-                (trajectory[i].position[1] == globalPath.back().position[1])&&
-                (trajectory[i].heading == globalPath.back().heading))
-            {
-                trajectory.resize(i+1);
-                break;
-            }
-        }
-        std::cout << "PLANNER: global Path is repaired from " << indexLim << std::endl;
-        std::cout << "PLANNER: global Path size is " << globalPath.size() << std::endl;
-        std::cout << "PLANNER: trajectory is repaired from " << trajectory.size() << std::endl;
-      //Trajectory is repaired from indexLim
-        localNode * lSet = calculateLocalPropagation(trajectory.back(),Treach);
-        std::vector<base::Waypoint> localPath = getLocalPath(lSet,trajectory[indexLim],0.4);
-        base::Waypoint newWaypoint;
-        newWaypoint.position[0] = lSet->global_pose.position[0];
-        newWaypoint.position[1] = lSet->global_pose.position[1];
-        std::vector<base::Waypoint> restPath = getGlobalPath(newWaypoint);
-        trajectory.insert(trajectory.end(),localPath.begin(),localPath.end());
-        trajectory.insert(trajectory.end(),restPath.begin(),restPath.end());
-        return true;
-    }*/
     return false;
 }
 
