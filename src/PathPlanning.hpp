@@ -2,6 +2,7 @@
 #define _PATHPLANNING_LIBRARIES_HPP_
 
 #include <base/samples/RigidBodyState.hpp>
+#include <base/samples/DistanceImage.hpp>
 #include <base/samples/Frame.hpp>
 #include <base/Waypoint.hpp>
 #include <base/Trajectory.hpp>
@@ -173,12 +174,14 @@ namespace PathPlanning_lib
             bool computeLocalPlanning(base::Waypoint wPos,
                                   std::vector< std::vector<double> >& costMatrix,
                                   double res,
-                                  std::vector<base::Waypoint>& trajectory);
+                                  std::vector<base::Waypoint>& trajectory,
+                                  bool keepOldWaypoints);
 
             bool computeLocalPlanning(base::Waypoint wPos,
                                   base::samples::frame::Frame traversabilityMap,
                                   double res,
-                                  std::vector<base::Waypoint>& trajectory);
+                                  std::vector<base::Waypoint>& trajectory,
+                                  bool keepOldWaypoints);
 
             void expandRisk();
 
@@ -192,11 +195,13 @@ namespace PathPlanning_lib
 
             double getTotalCost(base::Waypoint wInt);
 
-            localNode * computeLocalPropagation(base::Waypoint wInit, double Treach, double distReference);
+            localNode * computeLocalPropagation(base::Waypoint wInit, base::Waypoint wOvertake, bool keepOldWaypoints);
 
-            bool propagateLocalNode(localNode* nodeTarget, double Tstart, double Treach, double distReference);
+            void propagateLocalNode(localNode* nodeTarget);
 
-            localNode* minCostLocalNode(double Tovertake);
+            localNode* minCostLocalNode(double Tovertake, double minC);
+
+            localNode* minCostLocalNode(localNode* reachNode);
 
             std::vector<base::Waypoint> getLocalPath(localNode * lSetNode,
                                                      base::Waypoint wInit,
@@ -222,7 +227,10 @@ namespace PathPlanning_lib
             bool isBlockingObstacle(localNode* obNode, uint& maxIndex, uint& minIndex);
 
             void repairPath(std::vector<base::Waypoint>& trajectory, uint minIndex, uint maxIndex);
-            void repairPath(std::vector<base::Waypoint>& trajectory, base::Waypoint wInit, base::Waypoint wOvertake);
+            void repairPath(std::vector<base::Waypoint>& trajectory, base::Waypoint wInit, std::vector<base::Waypoint>& globalPath, uint index, bool keepOldWaypoints);
+
+            base::samples::DistanceImage getGlobalCostMap();
+            base::samples::DistanceImage getGlobalTotalCostMap();
     };
 
 } // end namespace motion_planning_libraries
