@@ -605,7 +605,7 @@ bool PathPlanning::computeLocalPlanning(base::Waypoint wPos,
     bool isBlocked = false;
 
     double offsetX = wPos.position[0] - res*(double)width/2;
-    double offsetY = wPos.position[1] - res*(double)height/2;
+    double offsetY = wPos.position[1] + res*(double)height/2; // Image convention (Y pointing down)
   
     base::Pose2D pos;
 
@@ -614,11 +614,11 @@ bool PathPlanning::computeLocalPlanning(base::Waypoint wPos,
         for (uint i = 0; i < width; i++)
         {
             pos.position[0] = offsetX + i*res;
-            pos.position[1] = offsetY + j*res;
+            pos.position[1] = offsetY - j*res; // Image convention (Y pointing down)
             uint value = traversabilityMap.image[j*traversabilityMap.getRowSize()+i*traversabilityMap.getPixelSize()]; //TODO: check if this is correct!!
             lNode = getLocalNode(pos);
             gNode = getNearestGlobalNode(lNode->parent_pose);
-            if ((!lNode->isObstacle)&&((value == 0)||(gNode->isObstacle))) //If pixel is obstacle
+            if ((!lNode->isObstacle)&&((value == 1)||(gNode->isObstacle))) //If pixel is obstacle (value == 1)
             {
                 lNode->isObstacle = true;
                 localExpandableObstacles.push_back(lNode);
