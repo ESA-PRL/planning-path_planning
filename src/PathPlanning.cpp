@@ -123,10 +123,10 @@ void PathPlanning::initGlobalMap(double globalCellSize,  double localCellSize,
         {
             calculateSmoothCost(globalMap[j][i]);
         }
-    std::cout << "PLANNER: Nominal Cost, Slope and Aspect calculated in " << (base::Time::now()-t1)
-              << " s" << std::endl;
+    std::cout << "PLANNER: Nominal Cost, Slope and Aspect calculated in " << 
+                 (base::Time::now()-t1) << " s" << std::endl;
 
-   // Initialize goal global node
+  // Initialize goal global node
     global_goalNode = getGlobalNode(0,0);
 }
 
@@ -843,7 +843,7 @@ double PathPlanning::getTotalCost(localNode* lNode)
     double a = lNode->global_pose.position[0] - (double)(i);
     double b = lNode->global_pose.position[1] - (double)(j);
 
-    globalNode * node00 = globalMap[j][i];
+    globalNode * node00 = getNearestGlobalNode(lNode->parent_pose);
     globalNode * node10 = node00->nb4List[2];
     globalNode * node01 = node00->nb4List[3];
     globalNode * node11 = node00->nb4List[2]->nb4List[3];
@@ -1214,7 +1214,8 @@ std::vector<base::Waypoint> PathPlanning::getGlobalPath(base::Waypoint wPos)
       {
           wNext = calculateNextGlobalWaypoint(wPos, tau*global_cellSize);
           trajectory.push_back(wPos);
-          if(trajectory.size()>999999)//TODO: quit this
+          if(sqrt(pow((wPos.position[0] - wNext.position[0]),2) +
+               pow((wPos.position[1] - wNext.position[1]),2)) < 0.01*tau*global_cellSize)
           {
               std::cout << "PLANNER: ERROR in trajectory" << std::endl;
               return trajectory;
