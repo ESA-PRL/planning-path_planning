@@ -24,8 +24,7 @@ namespace PathPlanning_lib
     enum node_state
     {
         OPEN,
-        CLOSED,
-        HIDDEN
+        CLOSED
     };
 
     struct terrainType
@@ -40,6 +39,7 @@ namespace PathPlanning_lib
         base::Pose2D world_pose; //In physical Units respect to World Frame
         base::Pose2D parent_pose; // Position of Global Node Parent In Global Units
         base::Pose2D global_pose; // Position of this local node in Global Units respect to World Frame
+        double deviation;
         double total_cost;
         double cost;
         double risk;
@@ -53,6 +53,7 @@ namespace PathPlanning_lib
             parent_pose = _parent_pose;
             state = OPEN;
             risk = 0;
+            deviation = INF;
             total_cost = INF;
             isObstacle = false;
         }
@@ -109,8 +110,7 @@ namespace PathPlanning_lib
             std::vector<double> slope_range;
             std::vector<std::string> locomotion_modes;
         public:
-            PathPlanning(std::vector< terrainType* > _table,
-                         std::vector<double> costData,
+            PathPlanning(std::vector<double> costData,
                          std::vector<double> slope_values,
                          std::vector<std::string> locomotion_modes);
             ~PathPlanning();
@@ -123,8 +123,7 @@ namespace PathPlanning_lib
             std::vector<localNode*> local_narrowBand;
             std::vector<localNode*> localExpandableObstacles;
             std::vector<localNode*> horizonNodes;
-            std::vector<localNode*> local_closedNodes;
-            //std::vector<base::Waypoint> trajectory;
+            std::vector<localNode*> local_propagatedNodes;
             std::vector<base::Waypoint> globalPath;
             std::vector<bool> isGlobalWaypoint;
             std::vector<double> cost_data;
@@ -158,12 +157,6 @@ namespace PathPlanning_lib
 
             void propagateGlobalNode(globalNode* nodeTarget);
 
-            base::samples::DistanceImage getGlobalTotalCostMap();
-            base::samples::DistanceImage getGlobalCostMap();
-
-            base::samples::DistanceImage getLocalTotalCostMap(base::Waypoint wPos);
-            base::samples::DistanceImage getLocalRiskMap(base::Waypoint wPos);
-
             void createLocalMap(globalNode* gNode);
 
             localNode* introducePixelInMap(base::Vector2d pos, bool& newVisible, std::vector<base::Waypoint>& trajectory);
@@ -178,17 +171,17 @@ namespace PathPlanning_lib
             globalNode* getNearestGlobalNode(base::Pose2D pos);
             globalNode* getNearestGlobalNode(base::Waypoint wPos);
 
-            void updateLocalMap(base::Waypoint wPos);
-
-            bool evaluateLocalMap(base::Waypoint wPos,
+            bool computeLocalPlanning(base::Waypoint wPos,
                                   std::vector< std::vector<double> >& costMatrix,
                                   double res,
-                                  std::vector<base::Waypoint>& trajectory);
+                                  std::vector<base::Waypoint>& trajectory,
+                                  bool keepOldWaypoints);
 
-            bool evaluateLocalMap(base::Waypoint wPos,
+            bool computeLocalPlanning(base::Waypoint wPos,
                                   base::samples::frame::Frame traversabilityMap,
                                   double res,
-                                  std::vector<base::Waypoint>& trajectory);
+                                  std::vector<base::Waypoint>& trajectory,
+                                  bool keepOldWaypoints);
 
             void expandRisk();
 
@@ -196,21 +189,19 @@ namespace PathPlanning_lib
 
             void propagateRisk(localNode* nodeTarget);
 
-            /*envire::TraversabilityGrid* getEnvireLocalState(base::Waypoint wPos);
-
-            envire::ElevationGrid* getEnvireRisk(base::Waypoint wPos);*/
-
             void setHorizonCost(localNode* horizonNode);
 
-            double getInterpolatedCost(localNode* lNode);
+            double getTotalCost(localNode* lNode);
 
-            double getInterpolatedCost(base::Waypoint wInt);
+            double getTotalCost(base::Waypoint wInt);
 
-            localNode * calculateLocalPropagation(base::Waypoint wInit, double Treach);
+            localNode * computeLocalPropagation(base::Waypoint wInit, base::Waypoint wOvertake, bool keepOldWaypoints);
 
-            bool propagateLocalNode(localNode* nodeTarget, double Tstart, double Treach);
+            void propagateLocalNode(localNode* nodeTarget);
 
-            localNode* minCostLocalNode();
+            localNode* minCostLocalNode(double Tovertake, double minC);
+
+            localNode* minCostLocalNode(localNode* reachNode);
 
             std::vector<base::Waypoint> getLocalPath(localNode * lSetNode,
                                                      base::Waypoint wInit,
@@ -236,6 +227,10 @@ namespace PathPlanning_lib
             bool isBlockingObstacle(localNode* obNode, uint& maxIndex, uint& minIndex);
 
             void repairPath(std::vector<base::Waypoint>& trajectory, uint minIndex, uint maxIndex);
+            void repairPath(std::vector<base::Waypoint>& trajectory, base::Waypoint wInit, std::vector<base::Waypoint>& globalPath, uint index, bool keepOldWaypoints);
+
+            base::samples::DistanceImage getGlobalCostMap();
+            base::samples::DistanceImage getGlobalTotalCostMap();
     };
 
 } // end namespace motion_planning_libraries
