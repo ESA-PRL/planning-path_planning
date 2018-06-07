@@ -1373,7 +1373,8 @@ void PathPlanning::gradientNode(localNode* nodeTarget, double& dnx, double& dny)
     double dx, dy;
 
       if (((nodeTarget->nb4List[1] == NULL)&&(nodeTarget->nb4List[2] == NULL))||
-          ((nodeTarget->nb4List[1]->deviation == INF)&&(nodeTarget->nb4List[2]->deviation == INF)))
+          ((nodeTarget->nb4List[1] != NULL)&&(nodeTarget->nb4List[2] != NULL)&&
+           (nodeTarget->nb4List[1]->deviation == INF)&&(nodeTarget->nb4List[2]->deviation == INF)))
           dx = 0;
       else
       {
@@ -1389,7 +1390,8 @@ void PathPlanning::gradientNode(localNode* nodeTarget, double& dnx, double& dny)
           }
       }
       if (((nodeTarget->nb4List[0] == NULL)&&(nodeTarget->nb4List[3] == NULL))||
-          ((nodeTarget->nb4List[0]->deviation == INF)&&(nodeTarget->nb4List[3]->deviation == INF)))
+          ((nodeTarget->nb4List[0] != NULL)&&(nodeTarget->nb4List[3] != NULL)&&
+           (nodeTarget->nb4List[0]->deviation == INF)&&(nodeTarget->nb4List[3]->deviation == INF)))
           dy = 0;
       else
       {
@@ -1413,7 +1415,8 @@ void PathPlanning::gradientNode(globalNode* nodeTarget, double& dnx, double& dny
     double dx, dy;
 
       if (((nodeTarget->nb4List[1] == NULL)&&(nodeTarget->nb4List[2] == NULL))||
-          ((nodeTarget->nb4List[1]->total_cost == INF)&&(nodeTarget->nb4List[2]->total_cost == INF)))
+          ((nodeTarget->nb4List[1] != NULL)&&(nodeTarget->nb4List[2] != NULL)&&
+           (nodeTarget->nb4List[1]->total_cost == INF)&&(nodeTarget->nb4List[2]->total_cost == INF)))
           dx = 0;
       else
       {
@@ -1429,7 +1432,8 @@ void PathPlanning::gradientNode(globalNode* nodeTarget, double& dnx, double& dny
           }
       }
       if (((nodeTarget->nb4List[0] == NULL)&&(nodeTarget->nb4List[3] == NULL))||
-          ((nodeTarget->nb4List[0]->total_cost == INF)&&(nodeTarget->nb4List[3]->total_cost == INF)))
+          ((nodeTarget->nb4List[0] != NULL)&&(nodeTarget->nb4List[3] != NULL)&&
+           (nodeTarget->nb4List[0]->total_cost == INF)&&(nodeTarget->nb4List[3]->total_cost == INF)))
           dy = 0;
       else
       {
