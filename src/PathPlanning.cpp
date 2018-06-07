@@ -26,7 +26,7 @@ PathPlanning::~PathPlanning()
 
 
 
-
+/*******************GLOBAL_MAP_INITIALIZATION************************************/
 void PathPlanning::initGlobalMap(double globalCellSize,  double localCellSize,
                                  base::Pose2D offset,
                                  std::vector< std::vector<double> > elevation,
@@ -131,6 +131,8 @@ void PathPlanning::initGlobalMap(double globalCellSize,  double localCellSize,
 }
 
 
+/*****************************GET GLOBAL NODE*******************************/
+// Returns Global Node Nij
 
 globalNode* PathPlanning::getGlobalNode(uint i, uint j)
 {
@@ -1219,7 +1221,7 @@ std::vector<base::Waypoint> PathPlanning::getGlobalPath(base::Waypoint wPos)
           }
           wPos = wNext;
       }
-      std::cout<< "PLANNER: Adding final waypoint with heading" << sinkPoint.heading << " "<< trajectory.back().heading<<  std::endl;
+      std::cout<< "PLANNER: Adding final waypoint with heading" << sinkPoint.heading << std::endl;
       trajectory.push_back(sinkPoint);
 
       for(uint i = 0; i<trajectory.size(); i++)
