@@ -608,6 +608,9 @@ bool PathPlanning::computeLocalPlanning(base::Waypoint wPos,
 
     double offsetX = wPos.position[0] - res*(double)width/2;
     double offsetY = wPos.position[1] + res*(double)height/2; // Image convention (Y pointing down)
+
+    double globalSizeX = offsetX + global_cellSize*globalMap[0].size();
+    double globalSizeY = offsetY + global_cellSize*globalMap.size();
   
     base::Pose2D pos;
 
@@ -617,15 +620,18 @@ bool PathPlanning::computeLocalPlanning(base::Waypoint wPos,
         {
             pos.position[0] = offsetX + i*res;
             pos.position[1] = offsetY - j*res; // Image convention (Y pointing down)
-            uint value = traversabilityMap.image[j*traversabilityMap.getRowSize()+i*traversabilityMap.getPixelSize()]; //TODO: check if this is correct!!
-            lNode = getLocalNode(pos);
-            gNode = getNearestGlobalNode(lNode->parent_pose);
-            if ((!lNode->isObstacle)&&((value == 1)||(gNode->isObstacle))) //If pixel is obstacle (value == 1)
+            if((pos.position[0] > offsetX)&&(pos.position[0] < globalSizeX)&&(pos.position[1]>offsetY)&&(pos.position[1] < globalSizeY))
             {
+                uint value = traversabilityMap.image[j*traversabilityMap.getRowSize()+i*traversabilityMap.getPixelSize()]; //TODO: check if this is correct!!
+                lNode = getLocalNode(pos);
+                gNode = getNearestGlobalNode(lNode->parent_pose);
+                if ((!lNode->isObstacle)&&((value == 1)||(gNode->isObstacle))) //If pixel is obstacle (value == 1)
+                {
                 lNode->isObstacle = true;
                 localExpandableObstacles.push_back(lNode);
                 lNode->risk = 1.0;
                 isBlocked = isBlockingObstacle(lNode, maxIndex, minIndex);//See here if its blocking (and which waypoint)
+                }
             }
         }
     }
@@ -1040,10 +1046,9 @@ localNode * PathPlanning::computeLocalPropagation(base::Waypoint wInit, base::Wa
             (nodeEnd->nb4List[0]->state == CLOSED)&&(nodeEnd->nb4List[2]->state == CLOSED)&&
             (nodeEnd->nb4List[2]->state == CLOSED)&&(nodeEnd->nb4List[3]->state == CLOSED))
         {
-            std::cout<< "PLANNER: ended local propagation loop" << std::endl;
+            std::cout<<  std::endl;
             t1 = base::Time::now() - t1;
-            std::cout<<"Computation Time: " << t1 <<std::endl;
-            std::cout<< "PLANNER: nodeEnd " << nodeEnd->global_pose.position[0] << "," << nodeEnd->global_pose.position[1] << "has risk " << nodeEnd->risk << std::endl;
+            std::cout<< "PLANNER: ended local propagation loop in " << t1 << " seconds" << std::endl;
             return nodeEnd;
         }
     }
