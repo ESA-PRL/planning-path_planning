@@ -586,6 +586,7 @@ bool PathPlanning::computeLocalPlanning(base::Waypoint wPos,
                                     std::vector<base::Waypoint>& trajectory,
                                     bool keepOldWaypoints)
 {
+    
     localNode* lNode;
     globalNode* gNode;
 
@@ -609,23 +610,27 @@ bool PathPlanning::computeLocalPlanning(base::Waypoint wPos,
     double offsetX = wPos.position[0] - res*(double)width/2;
     double offsetY = wPos.position[1] + res*(double)height/2; // Image convention (Y pointing down)
 
-    double globalSizeX = offsetX + global_cellSize*globalMap[0].size();
-    double globalSizeY = offsetY + global_cellSize*globalMap.size();
-  
+    double globalSizeX = global_cellSize*globalMap[0].size();
+    double globalSizeY = global_cellSize*globalMap.size();
+    
+    std::cout << "PLANNER: received map " << std::endl;
+    std::cout << "PLANNER: height = " << height <<" and width = "<< width << std::endl;
+    std::cout << "PLANNER: offsetX = " << offsetX <<" and offsetY = "<< offsetY << std::endl;
+    
     base::Pose2D pos;
-
+    t1 = base::Time::now();
     for (uint j = 0; j < height; j++)
     {
         for (uint i = 0; i < width; i++)
         {
             pos.position[0] = offsetX + i*res;
             pos.position[1] = offsetY - j*res; // Image convention (Y pointing down)
-            if((pos.position[0] > offsetX)&&(pos.position[0] < globalSizeX)&&(pos.position[1]>offsetY)&&(pos.position[1] < globalSizeY))
+            if((pos.position[0] > 0.0)&&(pos.position[0] < globalSizeX)&&(pos.position[1] > 0.0)&&(pos.position[1] < globalSizeY))
             {
-                uint value = traversabilityMap.image[j*traversabilityMap.getRowSize()+i*traversabilityMap.getPixelSize()]; //TODO: check if this is correct!!
+                uint8_t value = traversabilityMap.image[j*traversabilityMap.getRowSize()+i*traversabilityMap.getPixelSize()]; //TODO: check if this is correct!!
                 lNode = getLocalNode(pos);
                 gNode = getNearestGlobalNode(lNode->parent_pose);
-                if ((!lNode->isObstacle)&&((value == 1)||(gNode->isObstacle))) //If pixel is obstacle (value == 1)
+                if ((!lNode->isObstacle)&&((value != 0)||(gNode->isObstacle))) //If pixel is obstacle (value == 1)
                 {
                 lNode->isObstacle = true;
                 localExpandableObstacles.push_back(lNode);
@@ -635,6 +640,8 @@ bool PathPlanning::computeLocalPlanning(base::Waypoint wPos,
             }
         }
     }
+    t1 = base::Time::now() - t1;
+    std::cout<< "PLANNER: read traversability map in " << t1 << " seconds" << std::endl;
 
     if(isBlocked)
     {
