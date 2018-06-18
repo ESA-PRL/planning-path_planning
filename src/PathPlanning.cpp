@@ -1625,3 +1625,82 @@ base::samples::DistanceImage PathPlanning::getGlobalCostMap()
     globalCostMap.center_y = global_offset.position[1] + global_cellSize*0.5*globalMap.size();
     return globalCostMap;
 }
+
+// Output Local Risk Map
+base::samples::DistanceImage PathPlanning::getLocalRiskMap(base::Waypoint wPos)
+{
+    base::samples::DistanceImage localRiskMap;
+    
+    uint a = (uint)(fmax(0,wPos.position[1] - 2.0));
+    uint b = (uint)(fmin(globalMap.size(),wPos.position[1] + 2.0));
+    uint c = (uint)(fmax(0,wPos.position[0] - 2.0));
+    uint d = (uint)(fmin(globalMap[0].size(),wPos.position[0] + 2.0));
+  
+    /*std::cout << "PLANNER: received map " << std::endl;
+    std::cout << "PLANNER: a = " << a <<" b = "<< b << " c = "<< c <<" d = "<< d << std::endl;
+    std::cout << "PLANNER: ratio scale = " << ratio_scale << std::endl;*/
+
+    double R;
+
+    localRiskMap.setSize(ratio_scale*(1+d-c),ratio_scale*(1+b-a));
+
+        for (uint j = 0; j <= b-a; j++)
+            for (uint i = 0; i <= d-c; i++)
+                for (uint l = 0; l < ratio_scale; l++)
+                    for (uint k = 0; k < ratio_scale; k++)
+                    {
+                        //expandGlobalNode(globalMap[j+a][i+c]);
+                        R = globalMap[j+a][i+c]->localMap[l][k]->risk;
+                        if (R == 1)
+                            localRiskMap.data[k + ratio_scale*i + (l + ratio_scale*j)*ratio_scale*(1+d-c)] = 255;
+                        if ((R > 0)&&(R<1))
+                            localRiskMap.data[k + ratio_scale*i + (l + ratio_scale*j)*ratio_scale*(1+d-c)] = 128;
+                        if (R==0)
+                            localRiskMap.data[k + ratio_scale*i + (l + ratio_scale*j)*ratio_scale*(1+d-c)] = 16;
+                        if (local_actualPose == globalMap[j+a][i+c]->localMap[l][k])
+                            localRiskMap.data[k + ratio_scale*i + (l + ratio_scale*j)*ratio_scale*(1+d-c)] = 0;
+                    }
+
+    localRiskMap.scale_x = local_cellSize;
+    localRiskMap.scale_y = local_cellSize;
+    localRiskMap.center_x = wPos.position[0];
+    localRiskMap.center_y = wPos.position[1];
+    return localRiskMap;
+}
+
+// Output Local Propagation Map
+base::samples::DistanceImage PathPlanning::getLocalPropagationMap(base::Waypoint wPos)
+{
+    base::samples::DistanceImage localPropagationMap;
+    
+    uint a = (uint)(fmax(0,wPos.position[1] - 2.0));
+    uint b = (uint)(fmin(globalMap.size(),wPos.position[1] + 2.0));
+    uint c = (uint)(fmax(0,wPos.position[0] - 2.0));
+    uint d = (uint)(fmin(globalMap[0].size(),wPos.position[0] + 2.0));
+  
+    /*std::cout << "PLANNER: received map " << std::endl;
+    std::cout << "PLANNER: a = " << a <<" b = "<< b << " c = "<< c <<" d = "<< d << std::endl;
+    std::cout << "PLANNER: ratio scale = " << ratio_scale << std::endl;*/
+
+    double t;
+
+    localPropagationMap.setSize(ratio_scale*(1+d-c),ratio_scale*(1+b-a));
+
+        for (uint j = 0; j <= b-a; j++)
+            for (uint i = 0; i <= d-c; i++)
+                for (uint l = 0; l < ratio_scale; l++)
+                    for (uint k = 0; k < ratio_scale; k++)
+                    {
+                        t = globalMap[j+a][i+c]->localMap[l][k]->deviation;
+                        if (t == INF)
+                            localPropagationMap.data[k + ratio_scale*i + (l + ratio_scale*j)*ratio_scale*(1+d-c)] = 0;
+                        else
+                            localPropagationMap.data[k + ratio_scale*i + (l + ratio_scale*j)*ratio_scale*(1+d-c)] = fmin(t*40.0,255);
+                    }
+
+    localPropagationMap.scale_x = local_cellSize;
+    localPropagationMap.scale_y = local_cellSize;
+    localPropagationMap.center_x = wPos.position[0];
+    localPropagationMap.center_y = wPos.position[1];
+    return localPropagationMap;
+}
