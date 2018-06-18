@@ -231,6 +231,8 @@ namespace PathPlanning_lib
 
             base::samples::DistanceImage getGlobalCostMap();
             base::samples::DistanceImage getGlobalTotalCostMap();
+            base::samples::DistanceImage getLocalRiskMap(base::Waypoint wPos);
+            base::samples::DistanceImage getLocalPropagationMap(base::Waypoint wPos);
     };
 
 } // end namespace motion_planning_libraries
