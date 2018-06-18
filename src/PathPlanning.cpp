@@ -1376,8 +1376,8 @@ bool PathPlanning::calculateNextWaypoint(base::Waypoint& wPos, double tau)
 
     if ((std::isnan(wPos.position[0]))||(std::isnan(wPos.position[1])))
     {
-        return false;
         std::cout << "PLANNER: ERROR, nan position" << std::endl;
+        return false;
     }
     return true;
 }
