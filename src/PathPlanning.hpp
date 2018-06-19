@@ -210,7 +210,7 @@ namespace PathPlanning_lib
 
             std::vector<base::Waypoint> getNewPath(base::Waypoint wPos);
 
-            bool calculateNextWaypoint(base::Waypoint& wPos, double tau);
+            bool computeLocalWaypointGDM(base::Waypoint& wPos, double tau);
             base::Waypoint calculateNextGlobalWaypoint(base::Waypoint& wPos, double tau);
 
             void gradientNode(localNode* nodeTarget, double& dnx, double& dny);
@@ -224,7 +224,7 @@ namespace PathPlanning_lib
 
             bool isHorizon(localNode* lNode);
 
-            bool isBlockingObstacle(localNode* obNode, uint& maxIndex, uint& minIndex);
+            bool isBlockingObstacle(localNode* obNode, uint& maxIndex, uint& minIndex, std::vector<base::Waypoint> trajectory);
 
             void repairPath(std::vector<base::Waypoint>& trajectory, uint minIndex, uint maxIndex);
             void repairPath(std::vector<base::Waypoint>& trajectory, base::Waypoint wInit, std::vector<base::Waypoint>& globalPath, uint index, bool keepOldWaypoints);
