@@ -1,3 +1,15 @@
+/*********************ARES**************************
+      Autonomous Routing on Extreme Surfaces
+    University of Malaga - European Space Agency
+                    -Author-
+            J. Ricardo Sanchez Ibanez
+                 -Contact mail-
+                ricardosan@uma.es
+                  -Supervisors-
+            Carlos J. Perez del Pulgar
+                 Martin Azkarate
+****************************************************/
+
 #include "PathPlanning.hpp"
 #include <stdlib.h>
 #include <stdio.h>
