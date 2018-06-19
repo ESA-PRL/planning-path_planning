@@ -1105,7 +1105,6 @@ localNode * PathPlanning::computeLocalPropagation(base::Waypoint wInit, base::Wa
             (nodeEnd->nb4List[0]->state == CLOSED)&&(nodeEnd->nb4List[2]->state == CLOSED)&&
             (nodeEnd->nb4List[2]->state == CLOSED)&&(nodeEnd->nb4List[3]->state == CLOSED))
         {
-            std::cout<<  std::endl;
             t1 = base::Time::now() - t1;
             std::cout<< "PLANNER: ended local propagation loop in " << t1 << " seconds" << std::endl;
             return nodeEnd;
@@ -1225,26 +1224,27 @@ std::vector<base::Waypoint> PathPlanning::getLocalPath(localNode * lSetNode,
 
     tau = 0.5*local_cellSize;
     std::vector<base::Waypoint> trajectory;
-    newWaypoint = calculateNextWaypoint(wPos, tau*local_cellSize);
+    newWaypoint = computeLocalWaypointGDM(wPos, tau*local_cellSize);
     trajectory.insert(trajectory.begin(),wPos);
     std::cout << "PLANNER: repairing trajectory initialized" << std::endl;
     std::cout << "PLANNER: lSetNode at " << wPos.position[0] << ", " << wPos.position[1] << std::endl;
     std::cout << "PLANNER: wInit at " << wInit.position[0] << ", " << wInit.position[1] << std::endl;
 
     while(sqrt(pow((trajectory.front().position[0] - wInit.position[0]),2) +
-             pow((trajectory.front().position[1] - wInit.position[1]),2)) > (local_cellSize))
+             pow((trajectory.front().position[1] - wInit.position[1]),2)) > 1.5*local_cellSize)
     {
-        newWaypoint = calculateNextWaypoint(wPos, tau);
+        newWaypoint = computeLocalWaypointGDM(wPos, tau);
         if (newWaypoint)
             trajectory.insert(trajectory.begin(),wPos);
         else
             return trajectory;
-        if (trajectory.size() > 999)//TODO: quit this
+        /*if (trajectory.size() > 999)//TODO: quit this
         {
             std::cout << "PLANNER: ERROR computing local trajectory" << std::endl;
             return trajectory;
-        }
+        }*/
     }
+    
     std::cout << "PLANNER: trajectory front at " << trajectory.front().position[0] << ", " << trajectory.front().position[1] << std::endl;
     std::cout << "PLANNER: Local cell size is " << local_cellSize << std::endl;
     return trajectory;
@@ -1346,7 +1346,14 @@ base::Waypoint PathPlanning::calculateNextGlobalWaypoint(base::Waypoint& wPos, d
     return wNext;
 }
 
-bool PathPlanning::calculateNextWaypoint(base::Waypoint& wPos, double tau)
+
+/*
+  - Compute Local Waypoint GDM
+    -- Computation of next local waypoint using
+       gradient descent method
+*/
+
+bool PathPlanning::computeLocalWaypointGDM(base::Waypoint& wPos, double tau)
 {
     double a,b;
 
@@ -1424,15 +1431,22 @@ bool PathPlanning::calculateNextWaypoint(base::Waypoint& wPos, double tau)
     double dCostX = interpolate(a,b,gx00,gx01,gx10,gx11);
     double dCostY = interpolate(a,b,gy00,gy01,gy10,gy11);
 
-    wPos.position[0] = wPos.position[0] - tau*dCostX;///sqrt(pow(dCostX,2) + pow(dCostY,2));
-    wPos.position[1] = wPos.position[1] - tau*dCostY;///sqrt(pow(dCostX,2) + pow(dCostY,2));
-    wPos.heading = atan2(dCostY,dCostX);
-
-    if ((std::isnan(wPos.position[0]))||(std::isnan(wPos.position[1])))
+    if ((std::isnan(dCostX))||(std::isnan(dCostY)))
     {
-        std::cout << "PLANNER: ERROR, nan position" << std::endl;
+        std::cout << "PLANNER: WARNING, local waypoint (" << wPos.position[0] << "," << wPos.position[1] << ") is degenerate (nan gradient)" << std::endl;
         return false;
     }
+
+    if (sqrt(pow(dCostX,2) + pow(dCostY,2)) < 0.001)
+    {
+        std::cout << "PLANNER: WARNING, local waypoint (" << wPos.position[0] << "," << wPos.position[1] << ") is degenerate (near 0 gradient)" << std::endl;
+        return false;
+    }
+
+    wPos.position[0] = wPos.position[0] - tau*dCostX;
+    wPos.position[1] = wPos.position[1] - tau*dCostY;
+    wPos.heading = atan2(dCostY,dCostX);
+
     return true;
 }
 
