@@ -911,7 +911,7 @@ bool PathPlanning::isBlockingObstacle(localNode* obNode, uint& maxIndex, uint& m
         if(sqrt(
             pow(obNode->world_pose.position[0]-trajectory[k].position[0],2) +
             pow(obNode->world_pose.position[1]-trajectory[k].position[1],2))
-            < local_cellSize)
+            < risk_distance)
             return true;
 
     return isBlocked;
@@ -1304,7 +1304,7 @@ std::vector<base::Waypoint> PathPlanning::getGlobalPath(base::Waypoint wPos)
       std::vector<base::Waypoint> trajectory;
 
       trajectory.clear();
-      double tau = std::min(0.5,risk_distance);
+      double tau = std::min(0.4,risk_distance);
       wNext = calculateNextGlobalWaypoint(wPos, tau*global_cellSize);
       trajectory.push_back(wPos);
       wPos = wNext;
