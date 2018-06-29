@@ -106,13 +106,16 @@ namespace PathPlanning_lib
             double local_cellSize;
             uint ratio_scale;
             double risk_distance;
+            double reconnect_distance;
             globalNode* actualGlobalNodePos;
             std::vector<double> slope_range;
             std::vector<std::string> locomotion_modes;
         public:
             PathPlanning(std::vector<double> costData,
                          std::vector<double> slope_values,
-                         std::vector<std::string> locomotion_modes);
+                         std::vector<std::string> locomotion_modes,
+                           double risk_distance,
+                           double reconnect_distance);
             ~PathPlanning();
             bool setStartNode(base::Waypoint wStart);
             std::vector< std::vector<unsigned int*> > costMap;

@@ -20,12 +20,14 @@ using namespace PathPlanning_lib;
 
 PathPlanning::PathPlanning(std::vector<double> costData,
                            std::vector<double> slope_values,
-                           std::vector<std::string> locomotion_modes):
+                           std::vector<std::string> locomotion_modes,
+                           double risk_distance,
+                           double reconnect_distance):
                            cost_data(costData),
-                           slope_range(slope_values),locomotion_modes(locomotion_modes)
+                           slope_range(slope_values),locomotion_modes(locomotion_modes),
+                           risk_distance(risk_distance), reconnect_distance(reconnect_distance)
 {
     global_goalNode = NULL;
-    risk_distance = 0.5; //TODO: Make this configurable
     std::cout << "PLANNER: Cost data is [ ";
     for(uint i = 0; i<cost_data.size(); i++)
         std::cout << cost_data[i] << " ";
@@ -741,7 +743,7 @@ bool PathPlanning::computeLocalPlanning(base::Waypoint wPos,
 void PathPlanning::repairPath(std::vector<base::Waypoint>& trajectory, base::Waypoint wInit, std::vector<base::Waypoint>& globalPath, uint index, bool keepOldWaypoints)
 {    
     trajectory.clear(); // Much easier to directly clear the trajectory
-    if(index >= globalPath.size()-1) //This means last waypoint is on forbidden area
+    /*if(index >= globalPath.size()-1) //This means last waypoint is on forbidden area
     {
         
 	trajectory.push_back(wInit);
@@ -749,41 +751,57 @@ void PathPlanning::repairPath(std::vector<base::Waypoint>& trajectory, base::Way
         std::cout << "PLANNER: trajectory is cleared due to goal placed on forbidden area" << std::endl;
     }
     else
-    {
-        localNode * lSet = computeLocalPropagation(wInit, globalPath[index], keepOldWaypoints);
-        if (lSet == NULL) //Local Planning is aborted because of having entered obstacle area
+    {*/
+      //Increase index depending on reconnect distance
+        double oldIndex = index;
+        while((index < globalPath.size()-1)&&(sqrt(
+                   pow(globalPath[index].position[0]-globalPath[oldIndex].position[0],2)
+                   + pow(globalPath[index].position[1]-globalPath[oldIndex].position[1],2)
+                   ) <= reconnect_distance))
+            index++;
+        if(index >= globalPath.size()-1) //This means last waypoint is on forbidden area
         {
-            std::cout << "PLANNER: repairing aborted" << std::endl;
-            std::cout << "PLANNER: index = " << index << std::endl;
-            std::cout << "PLANNER: global stops at (" << globalPath[index].position[0] << "," << globalPath[index].position[1] << ")" << std::endl;
             trajectory.push_back(wInit);
             globalPath.clear();
+	    std::cout << "PLANNER: trajectory is cleared due to goal placed on forbidden area" << std::endl;
         }
         else
         {
-            std::vector<base::Waypoint> localPath = getLocalPath(lSet,wInit,0.4);
-            std::cout << "PLANNER: local path starts at (" << localPath[0].position[0] << "," << localPath[0].position[1] << ")" << std::endl;
-            if (keepOldWaypoints)
-            {        
-              // Remove old trajectory, including one extra global waypoint, which is coincident with last local waypoint
-                globalPath.erase(globalPath.begin(), globalPath.begin() + index + 1);
-                trajectory.insert(trajectory.end(),localPath.begin(),localPath.end());
-                trajectory.insert(trajectory.end(),globalPath.begin(),globalPath.end());
-            }
-            else
-            {
-                base::Waypoint newWaypoint;
-                newWaypoint.position[0] = lSet->global_pose.position[0];
-                newWaypoint.position[1] = lSet->global_pose.position[1];
-                globalPath.clear();
-                globalPath = getGlobalPath(newWaypoint);
-              // Remove first global waypoint, which is coincident with last local waypoint
-                globalPath.erase(globalPath.begin());
-                trajectory.insert(trajectory.end(),localPath.begin(),localPath.end());
-                trajectory.insert(trajectory.end(),globalPath.begin(),globalPath.end());
-            }
+             localNode * lSet = computeLocalPropagation(wInit, globalPath[index], keepOldWaypoints);
+             if (lSet == NULL) //Local Planning is aborted because of having entered obstacle area
+             {
+                 std::cout << "PLANNER: repairing aborted" << std::endl;
+                 std::cout << "PLANNER: index = " << index << std::endl;
+                 std::cout << "PLANNER: global stops at (" << globalPath[index].position[0] << "," << globalPath[index].position[1] << ")" << std::endl;
+                 trajectory.push_back(wInit);
+                 globalPath.clear();
+             }
+             else
+             {
+                 std::vector<base::Waypoint> localPath = getLocalPath(lSet,wInit,0.4);
+                 std::cout << "PLANNER: local path starts at (" << localPath[0].position[0] << "," << localPath[0].position[1] << ")" << std::endl;
+                 if (keepOldWaypoints)
+                 {        
+                   // Remove old trajectory, including one extra global waypoint, which is coincident with last local waypoint
+                     globalPath.erase(globalPath.begin(), globalPath.begin() + index + 1);
+                     trajectory.insert(trajectory.end(),localPath.begin(),localPath.end());
+                     trajectory.insert(trajectory.end(),globalPath.begin(),globalPath.end());
+                 }
+                 else
+                 {
+                     base::Waypoint newWaypoint;
+                     newWaypoint.position[0] = lSet->global_pose.position[0];
+                     newWaypoint.position[1] = lSet->global_pose.position[1];
+                     globalPath.clear();
+                     globalPath = getGlobalPath(newWaypoint);
+                   // Remove first global waypoint, which is coincident with last local waypoint
+                     globalPath.erase(globalPath.begin());
+                     trajectory.insert(trajectory.end(),localPath.begin(),localPath.end());
+                     trajectory.insert(trajectory.end(),globalPath.begin(),globalPath.end());
+                 }
+             }
         }
-    }
+    //}
 }
 
 
