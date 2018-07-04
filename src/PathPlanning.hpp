@@ -105,8 +105,9 @@ namespace PathPlanning_lib
             base::Pose2D global_offset;
             double local_cellSize;
             uint ratio_scale;
-            double risk_distance;
-            double reconnect_distance;
+            double risk_distance; //Distance risk is expanded
+            double reconnect_distance; //Distance to reconnect after first safe waypoint
+            double risk_ratio; //Number of times cost near obstacles is higher than safe cost
             globalNode* actualGlobalNodePos;
             std::vector<double> slope_range;
             std::vector<std::string> locomotion_modes;
@@ -115,7 +116,8 @@ namespace PathPlanning_lib
                          std::vector<double> slope_values,
                          std::vector<std::string> locomotion_modes,
                            double risk_distance,
-                           double reconnect_distance);
+                           double reconnect_distance,
+                           double risk_ratio);
             ~PathPlanning();
             bool setStartNode(base::Waypoint wStart);
             std::vector< std::vector<unsigned int*> > costMap;
@@ -214,6 +216,7 @@ namespace PathPlanning_lib
             std::vector<base::Waypoint> getNewPath(base::Waypoint wPos);
 
             bool computeLocalWaypointGDM(base::Waypoint& wPos, double tau);
+            base::Waypoint computeLocalWaypointDijkstra(localNode * lNode);
             base::Waypoint calculateNextGlobalWaypoint(base::Waypoint& wPos, double tau);
 
             void gradientNode(localNode* nodeTarget, double& dnx, double& dny);

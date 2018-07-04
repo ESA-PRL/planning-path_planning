@@ -22,10 +22,11 @@ PathPlanning::PathPlanning(std::vector<double> costData,
                            std::vector<double> slope_values,
                            std::vector<std::string> locomotion_modes,
                            double risk_distance,
-                           double reconnect_distance):
+                           double reconnect_distance,
+                           double risk_ratio):
                            cost_data(costData),
                            slope_range(slope_values),locomotion_modes(locomotion_modes),
-                           risk_distance(risk_distance), reconnect_distance(reconnect_distance)
+                           risk_distance(risk_distance), reconnect_distance(reconnect_distance),risk_ratio(risk_ratio)
 {
     global_goalNode = NULL;
     std::cout << "PLANNER: Cost data is [ ";
@@ -664,6 +665,7 @@ bool PathPlanning::computeLocalPlanning(base::Waypoint wPos,
                 lNode->risk = 1.0;
                 isBlocked = isBlockingObstacle(lNode, maxIndex, minIndex, trajectory);//See here if its blocking (and which waypoint)
                 pathBlocked = (pathBlocked)?true:isBlocked;// Path is blocked if isBlocked is true at least once
+                //pathBlocked |= isBlocked;
                 }
             }
         }
@@ -757,7 +759,7 @@ void PathPlanning::repairPath(std::vector<base::Waypoint>& trajectory, base::Way
         while((index < globalPath.size()-1)&&(sqrt(
                    pow(globalPath[index].position[0]-globalPath[oldIndex].position[0],2)
                    + pow(globalPath[index].position[1]-globalPath[oldIndex].position[1],2)
-                   ) <= reconnect_distance))
+                   ) == reconnect_distance))
             index++;
         if(index >= globalPath.size()-1) //This means last waypoint is on forbidden area
         {
@@ -784,6 +786,8 @@ void PathPlanning::repairPath(std::vector<base::Waypoint>& trajectory, base::Way
                  {        
                    // Remove old trajectory, including one extra global waypoint, which is coincident with last local waypoint
                      globalPath.erase(globalPath.begin(), globalPath.begin() + index + 1);
+                     globalPath.insert(globalPath.begin(), localPath.back());
+                     localPath.pop_back();
                      trajectory.insert(trajectory.end(),localPath.begin(),localPath.end());
                      trajectory.insert(trajectory.end(),globalPath.begin(),globalPath.end());
                  }
@@ -893,9 +897,11 @@ bool PathPlanning::isBlockingObstacle(localNode* obNode, uint& maxIndex, uint& m
             {
                 isBlocked = true;
                 minIndex = (i<minIndex)?i:minIndex;
+		//minIndex = max(i,minIndex);
             }
             else
                 maxIndex = (i>maxIndex)?i:maxIndex;
+		//maxIndex = min(i,minIndex);
         }
         else if (isBlocked)
         {
@@ -1174,10 +1180,13 @@ void PathPlanning::propagateLocalNode(localNode* nodeTarget)
     if (nodeTarget->total_cost == INF)
         nodeTarget->total_cost = getTotalCost(nodeTarget);
 
-    C = local_cellSize*(R + 1);
+    C = local_cellSize*(risk_ratio*R + 1);
 
     if(C <= 0)
         std::cout << "PLANNER: ERROR, C is not positive" << std::endl;
+
+    if(C > INF)
+        std::cout << "PLANNER: ERROR, C is higher than INF" << std::endl;
 
   // Eikonal Equation
     if ((fabs(Tx-Ty)<C)&&(Tx < INF)&&(Ty < INF))
@@ -1273,7 +1282,18 @@ std::vector<base::Waypoint> PathPlanning::getLocalPath(localNode * lSetNode,
         if (newWaypoint)
             trajectory.insert(trajectory.begin(),wPos);
         else
-            return trajectory;
+        {
+            std::cout << "PLANNER: WARNING, local trajectory is degenerated due to obstacles" << std::endl;
+            localNode * lNode = getLocalNode(trajectory[0]);
+            while(lNode->deviation == INF)
+            {
+                trajectory.erase(trajectory.begin());
+                lNode = getLocalNode(trajectory[0]);
+            }
+            wPos = computeLocalWaypointDijkstra(lNode);
+            trajectory.insert(trajectory.begin(),wPos);
+        }
+         //   return trajectory;
         /*if (trajectory.size() > 999)//TODO: quit this
         {
             std::cout << "PLANNER: ERROR computing local trajectory" << std::endl;
@@ -1315,6 +1335,11 @@ std::vector<base::Waypoint> PathPlanning::getGlobalPath(base::Waypoint wPos)
                pow((wPos.position[1] - sinkPoint.position[1]),2)) > global_cellSize)
       {
           wNext = calculateNextGlobalWaypoint(wPos, tau*global_cellSize);
+          /*if (wNext == NULL)
+          {
+              std::cout << "PLANNER: WARNING, global waypoint (" << wNext.position[0] << "," << wNext.position[1] << ") is degenerate (nan gradient)" << std::endl;
+              return trajectory;
+          }*/
           trajectory.push_back(wPos);
           if(sqrt(pow((wPos.position[0] - wNext.position[0]),2) +
                pow((wPos.position[1] - wNext.position[1]),2)) < 0.01*tau*global_cellSize)
@@ -1377,9 +1402,36 @@ base::Waypoint PathPlanning::calculateNextGlobalWaypoint(base::Waypoint& wPos, d
 
     wNext.heading = atan2(-dCostY,-dCostX);
 
-    /*if ((std::isnan(wNext.position[0]))||(std::isnan(wNext.position[1])))
+    /*if ((dCostX)||(dCostY))
         return NULL;*/
     return wNext;
+}
+
+/*
+ - Compute Local Waypoint Dijkstra
+   -- Computation of next local waypoint using
+      Dijkstra method
+   -- This is unlikely to be called, just whenever
+      a corridor surrounded by obstacles is met
+*/
+
+base::Waypoint PathPlanning::computeLocalWaypointDijkstra(localNode * lNode)
+{
+    double newX, newY, t = INF;
+    base::Waypoint wPos;
+
+    for (uint i = 1; i<4; i++)
+        if((lNode->nb4List[i] != NULL)&&(lNode->nb4List[i]->deviation < t))
+        {
+            t = lNode->nb4List[i]->deviation;
+            newX = lNode->nb4List[i]->world_pose.position[0];
+            newY = lNode->nb4List[i]->world_pose.position[1];
+        }
+
+    wPos.position[0] = newX;
+    wPos.position[1] = newY;
+    wPos.heading = atan2(newY-lNode->world_pose.position[1],newX-lNode->world_pose.position[0]);
+    return wPos;
 }
 
 
@@ -1700,7 +1752,7 @@ base::samples::DistanceImage PathPlanning::getGlobalTotalCostMap()
     {
         for (uint i = 0; i < globalMap[0].size(); i++)
         {
-                globalTotalCostMap.data[i + j*globalMap[0].size()] = (globalMap[j][i]->total_cost);
+                globalTotalCostMap.data[i + (globalMap.size()-j-1)*globalMap[0].size()] = (globalMap[j][i]->total_cost);
         }
     }
     globalTotalCostMap.scale_x = global_cellSize;
@@ -1720,7 +1772,7 @@ base::samples::DistanceImage PathPlanning::getGlobalCostMap()
     {
         for (uint i = 0; i < globalMap[0].size(); i++)
         {
-                globalCostMap.data[i + j*globalMap[0].size()] = (globalMap[j][i]->cost);
+                globalCostMap.data[i + (globalMap.size()-j-1)*globalMap[0].size()] = (globalMap[j][i]->cost);
         }
     }
     globalCostMap.scale_x = global_cellSize;
