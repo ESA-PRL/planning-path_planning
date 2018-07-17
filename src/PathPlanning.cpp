@@ -745,6 +745,14 @@ bool PathPlanning::computeLocalPlanning(base::Waypoint wPos,
 void PathPlanning::repairPath(std::vector<base::Waypoint>& trajectory, base::Waypoint wInit, std::vector<base::Waypoint>& globalPath, uint index, bool keepOldWaypoints)
 {    
     trajectory.clear(); // Much easier to directly clear the trajectory
+	
+	// It may happen a path with no Global Waypoints is intended to be repaired (since trajectory was cleared in previous repairing)
+	if (globalPath.empty())
+	{
+		std::cout << "PLANNER: repairing operation is called, but there are not Global Waypoints in the trajectory. Repairing aborted." << std::endl;
+		return;
+	}
+	
     /*if(index >= globalPath.size()-1) //This means last waypoint is on forbidden area
     {
         
@@ -764,8 +772,10 @@ void PathPlanning::repairPath(std::vector<base::Waypoint>& trajectory, base::Way
         if(index >= globalPath.size()-1) //This means last waypoint is on forbidden area
         {
             trajectory.push_back(wInit);
+			std::cout << "PLANNER: initial number of Global Waypoints was " << globalPath.size() << std::endl;
+			std::cout << "PLANNER: Global Waypoint to reconnect does not exist, variable index is " << index << std::endl;
             globalPath.clear();
-	    std::cout << "PLANNER: trajectory is cleared due to goal placed on forbidden area" << std::endl;
+			std::cout << "PLANNER: trajectory is cleared due to goal placed on forbidden area" << std::endl;
         }
         else
         {
