@@ -1794,10 +1794,10 @@ base::samples::DistanceImage PathPlanning::getLocalRiskMap(base::Waypoint wPos)
     base::samples::DistanceImage localRiskMap;
     double R;
     
-    uint a = (uint)(fmax(0,wPos.position[1] - 2.0));
-    uint b = (uint)(fmin(globalMap.size(),wPos.position[1] + 2.0));
-    uint c = (uint)(fmax(0,wPos.position[0] - 2.0));
-    uint d = (uint)(fmin(globalMap[0].size(),wPos.position[0] + 2.0));
+    uint a = (uint)(fmax(0,wPos.position[1] - 3.0));
+    uint b = (uint)(fmin(globalMap.size(),wPos.position[1] + 3.0));
+    uint c = (uint)(fmax(0,wPos.position[0] - 3.0));
+    uint d = (uint)(fmin(globalMap[0].size(),wPos.position[0] + 3.0));
 
     localRiskMap.setSize(ratio_scale*(1+d-c),ratio_scale*(1+b-a));
 
@@ -1811,7 +1811,7 @@ base::samples::DistanceImage PathPlanning::getLocalRiskMap(base::Waypoint wPos)
                         if (R == 1)
                             localRiskMap.data[k + ratio_scale*i + (ratio_scale*(1+b-a) - l - ratio_scale*j-1)*ratio_scale*(1+d-c)] = 255;
                         if ((R > 0)&&(R<1))
-                            localRiskMap.data[k + ratio_scale*i + (ratio_scale*(1+b-a) - l - ratio_scale*j-1)*ratio_scale*(1+d-c)] = 80;
+                            localRiskMap.data[k + ratio_scale*i + (ratio_scale*(1+b-a) - l - ratio_scale*j-1)*ratio_scale*(1+d-c)] = 32+R*(150-16);
                         if (R==0)
                             localRiskMap.data[k + ratio_scale*i + (ratio_scale*(1+b-a) - l - ratio_scale*j-1)*ratio_scale*(1+d-c)] = 16;
                         if (local_actualPose == globalMap[j+a][i+c]->localMap[l][k])
