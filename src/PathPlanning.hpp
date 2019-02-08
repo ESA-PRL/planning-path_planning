@@ -9,6 +9,8 @@
 #include <vector>
 #include <fstream>
 
+#include <base-logging/Logging.hpp>
+
 #define INF 100000000
 
 namespace PathPlanning_lib
