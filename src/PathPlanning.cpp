@@ -1323,8 +1323,8 @@ std::vector<base::Waypoint> PathPlanning::getGlobalPath(base::Waypoint wPos)
 {
       base::Waypoint sinkPoint;
       base::Waypoint wNext;
-      sinkPoint.position[0] = global_goalNode->pose.position[0];
-      sinkPoint.position[1] = global_goalNode->pose.position[1];
+      sinkPoint.position[0] = global_cellSize*global_goalNode->pose.position[0];
+      sinkPoint.position[1] = global_cellSize*global_goalNode->pose.position[1];
       sinkPoint.position[2] = global_goalNode->elevation;
       sinkPoint.heading = global_goalNode->pose.orientation;
 
@@ -1332,16 +1332,20 @@ std::vector<base::Waypoint> PathPlanning::getGlobalPath(base::Waypoint wPos)
 
       trajectory.clear();
       double tau = std::min(0.4,risk_distance);
-      wNext = calculateNextGlobalWaypoint(wPos, tau*global_cellSize);
+      wNext = calculateNextGlobalWaypoint(wPos, tau);
       trajectory.push_back(wPos);
-      wPos = wNext;
+      
       std::cout << "PLANNER: trajectory initialized with tau = " << tau << std::endl;
+      std::cout << "PLANNER: wPos = (" << wPos.position[0] << "," << wPos.position[1] << ")" << std::endl;
+      std::cout << "PLANNER: wNext = (" << wNext.position[0] << "," << wNext.position[1] << ")" << std::endl;
+      std::cout << "PLANNER: goal = (" << sinkPoint.position[0] << "," << sinkPoint.position[1] << ")" << std::endl;
+      wPos = wNext;
 
 
       while(sqrt(pow((wPos.position[0] - sinkPoint.position[0]),2) +
-               pow((wPos.position[1] - sinkPoint.position[1]),2)) > global_cellSize)
+               pow((wPos.position[1] - sinkPoint.position[1]),2)) > 2.0*global_cellSize)
       {
-          wNext = calculateNextGlobalWaypoint(wPos, tau*global_cellSize);
+          wNext = calculateNextGlobalWaypoint(wPos, tau);
           /*if (wNext == NULL)
           {
               std::cout << "PLANNER: WARNING, global waypoint (" << wNext.position[0] << "," << wNext.position[1] << ") is degenerate (nan gradient)" << std::endl;
@@ -1372,12 +1376,12 @@ base::Waypoint PathPlanning::calculateNextGlobalWaypoint(base::Waypoint& wPos, d
     base::Waypoint wNext;
 
   // Position of wPos in terms of global units
-    double globalXpos = (wPos.position[0]-global_offset.position[0]);
-    double globalYpos = (wPos.position[1]-global_offset.position[1]);
+    double globalXpos = (wPos.position[0]-global_offset.position[0])/global_cellSize;
+    double globalYpos = (wPos.position[1]-global_offset.position[1])/global_cellSize;
 
   // Position of the global Node placed next to wPos in the downleft corner
-    uint globalCornerX = (uint)(globalXpos/global_cellSize);
-    uint globalCornerY = (uint)(globalYpos/global_cellSize);
+    uint globalCornerX = (uint)(globalXpos);
+    uint globalCornerY = (uint)(globalYpos);
 
   // Distance wPos - globalCorner
     double globalDistX = globalXpos - (double)(globalCornerX);
@@ -1404,8 +1408,13 @@ base::Waypoint PathPlanning::calculateNextGlobalWaypoint(base::Waypoint& wPos, d
                                    gNode00->elevation, gNode10->elevation,
                                    gNode01->elevation, gNode11->elevation);
 
-    wNext.position[0] = wPos.position[0] - tau*dCostX;///sqrt(pow(dCostX,2) + pow(dCostY,2));
-    wNext.position[1] = wPos.position[1] - tau*dCostY;///sqrt(pow(dCostX,2) + pow(dCostY,2));
+    wNext.position[0] = wPos.position[0] - global_cellSize*tau*dCostX;///sqrt(pow(dCostX,2) + pow(dCostY,2));
+    wNext.position[1] = wPos.position[1] - global_cellSize*tau*dCostY;///sqrt(pow(dCostX,2) + pow(dCostY,2));
+
+    std::cout << "PLANNER: tau = " << tau << std::endl;
+    std::cout << "PLANNER: dCostY = " << dCostY << std::endl;
+    std::cout << "PLANNER: globalCornerY = " << globalCornerY << std::endl;
+    std::cout << "PLANNER: offsetY = " << global_offset.position[1] << std::endl;
 
     wNext.heading = atan2(-dCostY,-dCostX);
 
