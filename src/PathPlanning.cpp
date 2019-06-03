@@ -232,6 +232,7 @@ void PathPlanning::calculateNominalCost(globalNode* nodeTarget)
         if(slopeIndex > (slope_range.size()-1))
         {
             Cdefinitive = cost_data[0]; //TODO: here is obstacle, change this to vary k instead
+            nodeTarget->isObstacle = true;
         }
         else
         {
