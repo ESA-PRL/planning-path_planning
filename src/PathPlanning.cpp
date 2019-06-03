@@ -335,10 +335,11 @@ void PathPlanning::calculateGlobalPropagation(base::Waypoint wPos)
     global_goalNode->total_cost = 0;
 
     globalNode * nodeTarget = global_goalNode;
+    globalNode * startNode = getNearestGlobalNode(wPos);
 
     t1 = base::Time::now();
     std::cout<< "PLANNER: starting global propagation loop " << std::endl;
-    while ((!global_narrowBand.empty())&&(nodeTarget->total_cost < INF)) //TODO: if narrow band is empty, maybe nodeGoal is unreachable, fix this!!
+    while ((!global_narrowBand.empty())&&(startNode->state == OPEN)) //TODO: if narrow band is empty, maybe nodeGoal is unreachable, fix this!!
     {
         nodeTarget = minCostGlobalNode();
         nodeTarget->state = CLOSED;
