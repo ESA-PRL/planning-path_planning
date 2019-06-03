@@ -45,7 +45,7 @@ PathPlanning::~PathPlanning()
 void PathPlanning::initGlobalMap(double globalCellSize,  double localCellSize,
                                  base::Pose2D offset,
                                  std::vector< std::vector<double> > elevation,
-                                 std::vector< std::vector<double> > cost)
+                                 std::vector< std::vector<double> > terrainMap)
 {
     t1 = base::Time::now();
     global_cellSize = globalCellSize;
@@ -60,12 +60,12 @@ void PathPlanning::initGlobalMap(double globalCellSize,  double localCellSize,
     global_offset = offset;
     std::vector<globalNode*> nodeRow;
     uint i,j;
-    for (j = 0; j < cost.size(); j++)
+    for (j = 0; j < terrainMap.size(); j++)
     {
-        for (i = 0; i < cost[0].size(); i++)
+        for (i = 0; i < terrainMap[0].size(); i++)
         {
             nodeRow.push_back(new globalNode(i, j, elevation[j][i],
-                                           cost[j][i]));
+                                           terrainMap[j][i]));
             nodeRow.back()->world_pose.position[0] = i*global_cellSize;
             nodeRow.back()->world_pose.position[1] = j*global_cellSize;
         }
