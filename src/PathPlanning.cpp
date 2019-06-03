@@ -163,26 +163,26 @@ void PathPlanning::calculateSlope(globalNode* nodeTarget)
 {
     double dx, dy;
     if (nodeTarget->nb4List[1] == NULL)
-        dx = nodeTarget->nb4List[2]->elevation - nodeTarget->elevation;
+        dx = (nodeTarget->nb4List[2]->elevation - nodeTarget->elevation)/global_cellSize;
     else
     {
         if (nodeTarget->nb4List[2] == NULL)
-            dx = nodeTarget->elevation - nodeTarget->nb4List[1]->elevation;
+            dx = (nodeTarget->elevation - nodeTarget->nb4List[1]->elevation)/global_cellSize;
         else
             dx = (nodeTarget->nb4List[2]->elevation -
-                  nodeTarget->nb4List[1]->elevation)*0.5;
+                  nodeTarget->nb4List[1]->elevation)*0.5/global_cellSize;
     }
     if (nodeTarget->nb4List[0] == NULL)
-        dy = nodeTarget->nb4List[3]->elevation - nodeTarget->elevation;
+        dy = (nodeTarget->nb4List[3]->elevation - nodeTarget->elevation)/global_cellSize;
     else
     {
         if (nodeTarget->nb4List[3] == NULL)
-            dy = nodeTarget->elevation - nodeTarget->nb4List[0]->elevation;
+            dy = (nodeTarget->elevation - nodeTarget->nb4List[0]->elevation)/global_cellSize;
         else
             dy = (nodeTarget->nb4List[3]->elevation -
-                  nodeTarget->nb4List[0]->elevation)*0.5;
+                  nodeTarget->nb4List[0]->elevation)*0.5/global_cellSize;
     }
-    nodeTarget->slope = sqrt(pow(dx/global_cellSize,2)+pow(dy/global_cellSize,2));
+    nodeTarget->slope = atan(sqrt(pow(dx,2)+pow(dy,2)));
     // In this case, aspect points to the direction of maximum positive slope
     if ((dx == 0) && (dy == 0))
         nodeTarget->aspect = 0;
