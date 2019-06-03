@@ -135,13 +135,13 @@ void PathPlanning::initGlobalMap(double globalCellSize,  double localCellSize,
         }
     std::cout << "PLANNER: Nominal Cost, Slope and Aspect calculated in " << 
                  (base::Time::now()-t1) << " s" << std::endl;
-    for (j = 0; j < globalMap.size(); j++)
+    /*for (j = 0; j < globalMap.size(); j++)
         for (i = 0; i < globalMap[0].size(); i++)
         {
             calculateSmoothCost(globalMap[j][i]);
         }
     std::cout << "PLANNER: cost is smoothed in " << 
-          (base::Time::now()-t1) << " s" << std::endl;
+          (base::Time::now()-t1) << " s" << std::endl;*/
 
   // Initialize goal global node
     global_goalNode = getGlobalNode(0,0);
