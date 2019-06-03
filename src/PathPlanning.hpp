@@ -77,12 +77,12 @@ namespace PathPlanning_lib
         std::vector<globalNode*> nb4List;
         std::vector<globalNode*> nb8List;
         std::string nodeLocMode;
-        globalNode(uint x_, uint y_, double e_, double c_)
+        globalNode(uint x_, uint y_, double e_, double t_)
         {
             pose.position[0] = (double)x_;
             pose.position[1] = (double)y_;
           // Calculate slope and aspect
-            terrain = (unsigned int) c_;
+            terrain = (unsigned int) t_;
             elevation = e_;
             //risk.obstacle = r_;
             isObstacle = false;
