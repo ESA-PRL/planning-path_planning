@@ -1,2 +1,25 @@
-# planning-path_planning
-Path Planning libraries for reconfigurable rovers in extreme terrains
+# ESA-ARES Path Planner
+C++ implementation of the Dynamic Multi-layered (DyMu) Path Planner, resulting from the collaboration between the [University of Malaga](https://www.uma.es/robotics-and-mechatronics/info/107542/robotica-espacial/) and the [European Space Agency](https://www.esa.int/Our_Activities/Space_Engineering_Technology/Planetary_Robotics_Laboratory) under contract 4000118072/16/NL/LvH/gp.
+
+*Author:* J. Ricardo Sánchez Ibáñez
+
+*Supervisors:* Martin Azkarate (ESA) and Carlos J. Pérez del Pulgar (UMA)
+
+*Contact info:* ricardosan@uma.es
+
+## Video
+
+[HDPR using DyMu](https://youtu.be/X4mihNTEVGw)
+
+## Publications
+
+If you use this repository, please reference this paper:
+
+Sánchez Ibáñez, J. Ricardo, Pérez del Pulgar, Carlos J., Azkarate, M., Gerdes, L., García Cerezo, Alfonso. **Dynamic Path Planning for Reconfigurable Rovers using a Multilayered Grid**. *Engineering Applications of Artificial Intelligence*, 2019. (IN PRESS)
+
+
+## Implementations in other languages
+
+### MATLAB Implementation
+
+A Matlab version of this algorithm can be found [here](https://github.com/spaceuma/ARES-DyMu_matlab)
