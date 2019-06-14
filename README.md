@@ -1,4 +1,4 @@
-# ESA-ARES Path Planner
+# ARES Path Planner - DyMu
 C++ implementation of the Dynamic Multi-layered (DyMu) Path Planner, resulting from the collaboration between the [University of Malaga](https://www.uma.es/robotics-and-mechatronics/info/107542/robotica-espacial/) and the [European Space Agency](https://www.esa.int/Our_Activities/Space_Engineering_Technology/Planetary_Robotics_Laboratory) under contract 4000118072/16/NL/LvH/gp.
 
 *Author:* J. Ricardo Sánchez Ibáñez
