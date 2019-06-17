@@ -9,7 +9,7 @@ C++ implementation of the Dynamic Multi-layered (DyMu) Path Planner, resulting f
 
 ## Video
 
-[HDPR using DyMu](https://youtu.be/X4mihNTEVGw)
+[HDPR using DyMu during a Hazard Avoidance test](https://youtu.be/X4mihNTEVGw)
 
 ## Publications
 
@@ -20,6 +20,10 @@ Sánchez Ibáñez, J. Ricardo, Pérez del Pulgar, Carlos J., Azkarate, M., Gerde
 
 ## Implementations in other languages
 
+### Python Implementation
+
+A Python version of the DyMu path planning algorithm can be found [here](https://github.com/spaceuma/ARES-DyMu_python) 
+
 ### MATLAB Implementation
 
-A Matlab version of this algorithm can be found [here](https://github.com/spaceuma/ARES-DyMu_matlab)
+A Matlab version of the DyMu path planning algorithm can be found [here](https://github.com/spaceuma/ARES-DyMu_matlab)
