@@ -1412,11 +1412,6 @@ base::Waypoint PathPlanning::calculateNextGlobalWaypoint(base::Waypoint& wPos, d
     wNext.position[0] = wPos.position[0] - global_cellSize*tau*dCostX;///sqrt(pow(dCostX,2) + pow(dCostY,2));
     wNext.position[1] = wPos.position[1] - global_cellSize*tau*dCostY;///sqrt(pow(dCostX,2) + pow(dCostY,2));
 
-    std::cout << "PLANNER: tau = " << tau << std::endl;
-    std::cout << "PLANNER: dCostY = " << dCostY << std::endl;
-    std::cout << "PLANNER: globalCornerY = " << globalCornerY << std::endl;
-    std::cout << "PLANNER: offsetY = " << global_offset.position[1] << std::endl;
-
     wNext.heading = atan2(-dCostY,-dCostX);
 
     /*if ((dCostX)||(dCostY))
