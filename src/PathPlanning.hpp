@@ -182,13 +182,13 @@ namespace PathPlanning_lib
                                   std::vector< std::vector<double> >& costMatrix,
                                   double res,
                                   std::vector<base::Waypoint>& trajectory,
-                                  bool keepOldWaypoints);
+                                  bool keepOldWaypoints, base::Time &localTime);
 
             bool computeLocalPlanning(base::Waypoint wPos,
                                   base::samples::frame::Frame traversabilityMap,
                                   double res,
                                   std::vector<base::Waypoint>& trajectory,
-                                  bool keepOldWaypoints);
+                                  bool keepOldWaypoints, base::Time &localTime);
 
             void expandRisk();
 
