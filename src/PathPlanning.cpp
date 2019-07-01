@@ -607,7 +607,7 @@ bool PathPlanning::computeLocalPlanning(base::Waypoint wPos,
                                     base::samples::frame::Frame traversabilityMap,
                                     double res,
                                     std::vector<base::Waypoint>& trajectory,
-                                    bool keepOldWaypoints)
+                                    bool keepOldWaypoints, base::Time &localTime)
 {
     
     localNode* lNode;
@@ -675,8 +675,12 @@ bool PathPlanning::computeLocalPlanning(base::Waypoint wPos,
     if(pathBlocked)
     {
         LOG_DEBUG_S << std::endl << "-- LOCAL REPAIRING STARTED--";
+        base::Time tInit = base::Time::now();
+        std::cout <<  "Time now in library: " << tInit << std::endl;
         expandRisk();
         repairPath(trajectory, wPos, globalPath, maxIndex, keepOldWaypoints);
+        localTime = base::Time::now() - tInit;
+        std::cout << "Local Time in library: " << (base::Time::now()-tInit)  << std::endl;
         return true;
     }
     return false;
@@ -688,7 +692,7 @@ bool PathPlanning::computeLocalPlanning(base::Waypoint wPos,
                                        std::vector< std::vector<double> >& costMatrix,
                                        double res,
                                        std::vector<base::Waypoint>& trajectory,
-                                       bool keepOldWaypoints)
+                                       bool keepOldWaypoints, base::Time& localTime)
 {
     localNode* lNode;
     globalNode* gNode;
@@ -733,8 +737,10 @@ bool PathPlanning::computeLocalPlanning(base::Waypoint wPos,
 
     if(isBlocked)
     {
+        t1 = base::Time::now();
         expandRisk();
         repairPath(trajectory, wPos, globalPath, maxIndex, keepOldWaypoints);
+        localTime = base::Time::now() - t1;
         return true;
     }
 
