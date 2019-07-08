@@ -1,8 +1,20 @@
 #ifndef _PATHPLANNING_LIBRARIES_HPP_
 #define _PATHPLANNING_LIBRARIES_HPP_
 
+/*********************************DyMu******************************************
+                    -Dynamic Multilayered Path Planner-
+                        ARES (ESA-UMA Collaboration)
+                University of Malaga - European Space Agency
+                                -Author-
+                        J. Ricardo Sanchez Ibanez
+                             -Contact mail-
+                            ricardosan@uma.es
+                              -Supervisors-
+                        Carlos J. Perez del Pulgar
+                             Martin Azkarate
+*******************************************************************************/
+
 #include <base/samples/RigidBodyState.hpp>
-#include <base/samples/DistanceImage.hpp>
 #include <base/samples/Frame.hpp>
 #include <base/Waypoint.hpp>
 #include <base/Trajectory.hpp>
@@ -11,18 +23,10 @@
 
 #include <base-logging/Logging.hpp>
 
-#define INF 100000000
+#define INF 100000000 //Change this value to maximum available for float type
 
 namespace PathPlanning_lib
 {
-    /*enum local_state
-    {
-        HID,
-        OBSTACLE,
-        TRAVERSABLE_OPEN,
-        TRAVERSABLE_CLOSED
-    };*/
-
     enum node_state
     {
         OPEN,
@@ -67,7 +71,6 @@ namespace PathPlanning_lib
         base::Pose2D world_pose;
         double elevation;
         double slope;
-        double aspect;
         node_state state;
         bool isObstacle;
         bool hasLocalMap; //Has it localmap?
@@ -96,60 +99,74 @@ namespace PathPlanning_lib
         }
     };
 
-//__PATH_PLANNER_CLASS__
-    class PathPlanning
+//__DYMU_PATH_PLANNER_CLASS__
+    class DyMuPathPlanner
     {
         private:
-            base::samples::RigidBodyState mStartPose;
-            double pathCost;
-            std::vector< std::vector<globalNode*> > globalMap;
-            double global_cellSize;
+          // Global Layer
+            std::vector< std::vector<globalNode*> > global_layer;
+          // Global Resolution (same for X and Y axii)
+            double global_res;
+          // Offset of Global Node (0,0) with respect to world frame
             base::Pose2D global_offset;
+          // Local Resolution (same for X and Y axii)
             double local_cellSize;
-            uint ratio_scale;
-            double risk_distance; //Distance risk is expanded
-            double reconnect_distance; //Distance to reconnect after first safe waypoint
-            double risk_ratio; //Number of times cost near obstacles is higher than safe cost
-            globalNode* actualGlobalNodePos;
+          // Local Nodes contained within a Global Node edge
+            uint res_ratio;
+
+          // Local Repairing Parameters
+          // Risk Distance = Risky proximity to obstacles
+            double risk_distance;
+          // Distance to reconnect after first safe waypoint
+            // - Only relevant for Conservative Approach (Hazard Avoidance mode)
+            double reconnect_distance;
+          // Parameter that controls curvature of resulting repaired paths
+            double risk_ratio;
+          // Vector of slope values from 0 to the maximum feasible slope
             std::vector<double> slope_range;
+          // Vector of available locomotion modes
             std::vector<std::string> locomotion_modes;
+
         public:
-            PathPlanning(std::vector<double> costData,
+          // Class Constructor
+            DyMuPathPlanner(std::vector<double> costData,
                          std::vector<double> slope_values,
                          std::vector<std::string> locomotion_modes,
                            double risk_distance,
                            double reconnect_distance,
                            double risk_ratio);
-            ~PathPlanning();
-            bool setStartNode(base::Waypoint wStart);
-            std::vector< std::vector<unsigned int*> > costMap;
-	          std::vector< std::vector<double*> > riskMap;
-            std::vector< terrainType* > terrainTable;
-            std::vector<globalNode*> global_narrowBand;
-            std::vector<globalNode*> global_propagatedNodes;
-            std::vector<localNode*> local_narrowBand;
-            std::vector<localNode*> localExpandableObstacles;
-            std::vector<localNode*> horizonNodes;
-            std::vector<localNode*> local_propagatedNodes;
-            std::vector<base::Waypoint> globalPath;
-            std::vector<bool> isGlobalWaypoint;
-            std::vector<double> cost_data;
-
-            globalNode * global_goalNode;
-            localNode * local_goalNode;
-            localNode * local_actualPose;
-
-            double expectedCost;
-
-            base::Time t1;
-
-            void initGlobalMap(double globalCellSize,  double localCellSize,
+          // Class Destructor
+            ~DyMuPathPlanner();
+          // Initialization of Global Layer
+            bool initGlobalLayer(double globalCellSize,  double localCellSize,
                                base::Pose2D offset,
                                std::vector< std::vector<double> > elevation,
                                std::vector< std::vector<double> > cost);
+          // The narrow band is formed by those open nodes that have been
+          // already visited by the FMM solver
+            std::vector<globalNode*> global_narrowband;
+          // Compilation of all visited Global Nodes
+            std::vector<globalNode*> global_propagated_nodes;
+          // Same concept of narrow band as in the global computation
+            std::vector<localNode*> local_narrowband;
+          // Obstacle Local Nodes whose associated risk must be computed
+            std::vector<localNode*> local_expandable_obstacles;
+          // Same concept as in global
+            std::vector<localNode*> local_propagated_nodes;
+          // The last computed path
+            std::vector<base::Waypoint> current_path;
+          // LookUp Table containing cost values per terrain and slope value
+            std::vector<double> cost_lutable;
+          // Global Node containing the goal
+            globalNode * global_goal;
+          // Local Node containing the position of the agent
+            localNode * local_agent;
+          // Total Cost needed by the agent to reach the goal
+            double remaining_total_cost;
 
+          // Returns global node (i,j)
             globalNode* getGlobalNode(uint i, uint j);
-
+          // Slope is calculated for nodeTarget
             void calculateSlope(globalNode* nodeTarget);
 
             bool setGoal(base::Waypoint wGoal);
@@ -166,23 +183,13 @@ namespace PathPlanning_lib
 
             void createLocalMap(globalNode* gNode);
 
-            localNode* introducePixelInMap(base::Vector2d pos, bool& newVisible, std::vector<base::Waypoint>& trajectory);
-
             localNode* getLocalNode(base::Pose2D pos);
             localNode* getLocalNode(base::Waypoint wPos);
 
             void expandGlobalNode(globalNode* gNode);
 
-            bool simUpdateVisibility(base::Waypoint wPos, std::vector< std::vector<double> >& costMatrix, double res, bool initializing, double camHeading, std::vector<base::Waypoint>& trajectory);
-
             globalNode* getNearestGlobalNode(base::Pose2D pos);
             globalNode* getNearestGlobalNode(base::Waypoint wPos);
-
-            bool computeLocalPlanning(base::Waypoint wPos,
-                                  std::vector< std::vector<double> >& costMatrix,
-                                  double res,
-                                  std::vector<base::Waypoint>& trajectory,
-                                  bool keepOldWaypoints, base::Time &localTime);
 
             bool computeLocalPlanning(base::Waypoint wPos,
                                   base::samples::frame::Frame traversabilityMap,
@@ -230,19 +237,12 @@ namespace PathPlanning_lib
 
             void evaluatePath(std::vector<base::Waypoint>& trajectory);
 
-            bool isHorizon(localNode* lNode);
-
             bool isBlockingObstacle(localNode* obNode, uint& maxIndex, uint& minIndex, std::vector<base::Waypoint> trajectory);
 
             void repairPath(std::vector<base::Waypoint>& trajectory, uint minIndex, uint maxIndex);
-            void repairPath(std::vector<base::Waypoint>& trajectory, base::Waypoint wInit, std::vector<base::Waypoint>& globalPath, uint index, bool keepOldWaypoints);
-
-            base::samples::DistanceImage getGlobalCostMap();
-            base::samples::DistanceImage getGlobalTotalCostMap();
-            base::samples::DistanceImage getLocalRiskMap(base::Waypoint wPos);
-            base::samples::DistanceImage getLocalPropagationMap(base::Waypoint wPos);
+            void repairPath(std::vector<base::Waypoint>& trajectory, base::Waypoint wInit, std::vector<base::Waypoint>& current_path, uint index, bool keepOldWaypoints);
     };
 
-} // end namespace motion_planning_libraries
+} // end namespace
 
-#endif // _MOTION_PLANNING_LIBRARIES_HPP_
+#endif // _PATHPLANNING_LIBRARIES_HPP_
