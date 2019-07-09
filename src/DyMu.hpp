@@ -74,6 +74,7 @@ namespace PathPlanning_lib
         node_state state;
         bool isObstacle;
         bool hasLocalMap; //Has it localmap?
+        double raw_cost;
         double cost;
         double obstacle_ratio; //Ratio of obstacle area in the global node area
         double total_cost;
@@ -82,16 +83,20 @@ namespace PathPlanning_lib
         std::vector<globalNode*> nb4List;
         std::vector<globalNode*> nb8List;
         std::string nodeLocMode;
-        globalNode(uint x_, uint y_, double e_, double t_)
+        globalNode(uint x_, uint y_, double res, base::Pose2D offset)
         {
             pose.position[0] = (double)x_;
             pose.position[1] = (double)y_;
-          // Calculate slope and aspect
-            terrain = (unsigned int) t_;
-            elevation = e_;
+            world_pose.position[0] = (double)x_*res + offset.position[0];
+            world_pose.position[1] = (double)y_*res + offset.position[1];
+            //terrain = (unsigned int) t_;
+            //elevation = e_;
+
             //risk.obstacle = r_;
             isObstacle = false;
             hasLocalMap = false;
+            raw_cost = 0.0;
+            cost = 0.0;
             total_cost = INF;
             state = OPEN;
             nodeLocMode = "DONT_CARE";
@@ -105,12 +110,15 @@ namespace PathPlanning_lib
         private:
           // Global Layer
             std::vector< std::vector<globalNode*> > global_layer;
+          // Dimensions
+            uint num_nodes_X;
+            uint num_nodes_Y;
           // Global Resolution (same for X and Y axii)
             double global_res;
           // Offset of Global Node (0,0) with respect to world frame
             base::Pose2D global_offset;
           // Local Resolution (same for X and Y axii)
-            double local_cellSize;
+            double local_res;
           // Local Nodes contained within a Global Node edge
             uint res_ratio;
 
@@ -128,20 +136,8 @@ namespace PathPlanning_lib
             std::vector<std::string> locomotion_modes;
 
         public:
-          // Class Constructor
-            DyMuPathPlanner(std::vector<double> costData,
-                         std::vector<double> slope_values,
-                         std::vector<std::string> locomotion_modes,
-                           double risk_distance,
-                           double reconnect_distance,
-                           double risk_ratio);
-          // Class Destructor
-            ~DyMuPathPlanner();
-          // Initialization of Global Layer
-            bool initGlobalLayer(double globalCellSize,  double localCellSize,
-                               base::Pose2D offset,
-                               std::vector< std::vector<double> > elevation,
-                               std::vector< std::vector<double> > cost);
+          // -- PARAMETERS --
+
           // The narrow band is formed by those open nodes that have been
           // already visited by the FMM solver
             std::vector<globalNode*> global_narrowband;
@@ -164,6 +160,27 @@ namespace PathPlanning_lib
           // Total Cost needed by the agent to reach the goal
             double remaining_total_cost;
 
+          // -- FUNCTIONS --
+          // Class Constructor
+            DyMuPathPlanner(std::vector<double> costData,
+                         std::vector<double> slope_values,
+                         std::vector<std::string> locomotion_modes,
+                           double risk_distance,
+                           double reconnect_distance,
+                           double risk_ratio);
+          // Class Destructor
+            ~DyMuPathPlanner();
+          // Initialization of Global Layer using Elevation and Terrain Maps
+            bool initGlobalLayer(double globalres,  double localres,
+                                 uint num_nodes_X, uint num_nodes_Y,
+                                 base::Pose2D offset);
+
+            bool setCostMap(std::vector< std::vector<double> > cost_map);
+
+            bool computeCostMap(std::vector< std::vector<double> > elevation,
+                                std::vector< std::vector<double> > terrainMap,
+                                bool to_be_smoothed);
+
           // Returns global node (i,j)
             globalNode* getGlobalNode(uint i, uint j);
           // Slope is calculated for nodeTarget
@@ -171,11 +188,15 @@ namespace PathPlanning_lib
 
             bool setGoal(base::Waypoint wGoal);
 
-            void calculateGlobalPropagation(base::Waypoint wPos);
+            void calculateNominalCost(globalNode* nodeTarget,
+                                      bool to_be_smoothed);
 
-            void calculateNominalCost(globalNode* nodeTarget);
+            void smoothCost(globalNode* nodeTarget);
 
-            void calculateSmoothCost(globalNode* nodeTarget);
+            bool computeTotalCostMap(base::Waypoint wPos);
+            bool computeEntireTotalCostMap();
+
+            void resetTotalCostMap();
 
             globalNode* minCostGlobalNode();
 

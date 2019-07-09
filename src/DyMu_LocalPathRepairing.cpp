@@ -560,7 +560,7 @@ void DyMuPathPlanner::propagateRisk(localNode* nodeTarget)
 
     double Sx = 1 - Rx;
     double Sy = 1 - Ry;
-    double C = local_cellSize/risk_distance;
+    double C = local_res/risk_distance;
     double S;
 
     if (fabs(Sx-Sy)<C)
@@ -701,7 +701,7 @@ void DyMuPathPlanner::propagateLocalNode(localNode* nodeTarget)
     if (nodeTarget->total_cost == INF)
         nodeTarget->total_cost = getTotalCost(nodeTarget);
 
-    C = local_cellSize*(risk_ratio*R + 1);
+    C = local_res*(risk_ratio*R + 1);
 
     if(C <= 0)
         LOG_ERROR_S << "C is not positive";
@@ -788,16 +788,16 @@ std::vector<base::Waypoint> DyMuPathPlanner::getLocalPath(localNode * lSetNode,
     wPos.position[1] = lSetNode->global_pose.position[1];
     wPos.heading = lSetNode->global_pose.orientation;
 
-    tau = 0.5*local_cellSize;
+    tau = 0.5*local_res;
     std::vector<base::Waypoint> trajectory;
-    newWaypoint = computeLocalWaypointGDM(wPos, tau*local_cellSize);
+    newWaypoint = computeLocalWaypointGDM(wPos, tau*local_res);
     trajectory.insert(trajectory.begin(),wPos);
     LOG_DEBUG_S << "repairing trajectory initialized";
     LOG_DEBUG_S << "lSetNode at " << wPos.position[0] << ", " << wPos.position[1];
     LOG_DEBUG_S << "wInit at " << wInit.position[0] << ", " << wInit.position[1];
 
     while(sqrt(pow((trajectory.front().position[0] - wInit.position[0]),2) +
-             pow((trajectory.front().position[1] - wInit.position[1]),2)) > 1.5*local_cellSize)
+             pow((trajectory.front().position[1] - wInit.position[1]),2)) > 1.5*local_res)
     {
         newWaypoint = computeLocalWaypointGDM(wPos, tau);
         if (newWaypoint)
@@ -823,7 +823,7 @@ std::vector<base::Waypoint> DyMuPathPlanner::getLocalPath(localNode * lSetNode,
     }
 
     LOG_DEBUG_S << "trajectory front at " << trajectory.front().position[0] << ", " << trajectory.front().position[1];
-    LOG_DEBUG_S << "Local cell size is " << local_cellSize;
+    LOG_DEBUG_S << "Local cell size is " << local_res;
     return trajectory;
 }
 
@@ -888,8 +888,8 @@ bool DyMuPathPlanner::computeLocalWaypointGDM(base::Waypoint& wPos, double tau)
             node10 = lNode->nb4List[2];
             node01 = lNode->nb4List[3];
             node11 = lNode->nb4List[2]->nb4List[3];
-            a = (wPos.position[0] - lNode->world_pose.position[0])/local_cellSize;
-            b = (wPos.position[1] - lNode->world_pose.position[1])/local_cellSize;
+            a = (wPos.position[0] - lNode->world_pose.position[0])/local_res;
+            b = (wPos.position[1] - lNode->world_pose.position[1])/local_res;
         }
         else
         {
@@ -897,8 +897,8 @@ bool DyMuPathPlanner::computeLocalWaypointGDM(base::Waypoint& wPos, double tau)
             node10 = lNode->nb4List[2];
             node01 = lNode;
             node11 = lNode->nb4List[0]->nb4List[2];
-            a = (wPos.position[0] - lNode->world_pose.position[0])/local_cellSize;
-            b = 1+(wPos.position[1] - lNode->world_pose.position[1])/local_cellSize;
+            a = (wPos.position[0] - lNode->world_pose.position[0])/local_res;
+            b = 1+(wPos.position[1] - lNode->world_pose.position[1])/local_res;
         }
     }
     else
@@ -909,8 +909,8 @@ bool DyMuPathPlanner::computeLocalWaypointGDM(base::Waypoint& wPos, double tau)
             node10 = lNode;
             node01 = lNode->nb4List[3];
             node11 = lNode->nb4List[3]->nb4List[1];
-            a = 1+(wPos.position[0] - lNode->world_pose.position[0])/local_cellSize;
-            b = (wPos.position[1] - lNode->world_pose.position[1])/local_cellSize;
+            a = 1+(wPos.position[0] - lNode->world_pose.position[0])/local_res;
+            b = (wPos.position[1] - lNode->world_pose.position[1])/local_res;
         }
         else
         {
@@ -918,8 +918,8 @@ bool DyMuPathPlanner::computeLocalWaypointGDM(base::Waypoint& wPos, double tau)
             node10 = lNode->nb4List[0];
             node01 = lNode->nb4List[1];
             node11 = lNode;
-            a = 1+(wPos.position[0] - lNode->world_pose.position[0])/local_cellSize;
-            b = 1+(wPos.position[1] - lNode->world_pose.position[1])/local_cellSize;
+            a = 1+(wPos.position[0] - lNode->world_pose.position[0])/local_res;
+            b = 1+(wPos.position[1] - lNode->world_pose.position[1])/local_res;
         }
     }
 
