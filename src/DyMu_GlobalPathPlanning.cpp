@@ -26,14 +26,13 @@ DyMuPathPlanner::DyMuPathPlanner(std::vector<double> costData,
                            double reconnect_distance,
                            double risk_ratio):
                            cost_lutable(costData),
-                           slope_range(slope_values),locomotion_modes(locomotion_modes),
-                           risk_distance(risk_distance), reconnect_distance(reconnect_distance),risk_ratio(risk_ratio)
+                           slope_range(slope_values),
+                           locomotion_modes(locomotion_modes),
+                           risk_distance(risk_distance),
+                           reconnect_distance(reconnect_distance),
+                           risk_ratio(risk_ratio)
 {
     global_goal = NULL;
-    std::cout << "Cost data is [ ";
-    for(uint i = 0; i<cost_lutable.size(); i++)
-        std::cout << cost_lutable[i] << " ";
-    std::cout << " ]" << std::endl;;
 }
 
 DyMuPathPlanner::~DyMuPathPlanner()
@@ -107,26 +106,17 @@ bool DyMuPathPlanner::initGlobalLayer(double globalres, double localres,
         }
     }
 
-  // COST is computed
-    /*printf("Calculating Nominal Cost, Slope and Aspect values\n");
-    for (j = 0; j < global_layer.size(); j++)
-        for (i = 0; i < global_layer[0].size(); i++)
-        {
-            calculateSlope(global_layer[j][i]);
-            calculateNominalCost(global_layer[j][i], to_be_smoothed);
-        }
-    if (to_be_smoothed)
-        for (j = 0; j < global_layer.size(); j++)
-            for (i = 0; i < global_layer[0].size(); i++)
-                smoothCost(global_layer[j][i]);*/
-
     return true;
 }
 
-
+/*******************USING PREVIOUSLY DEFINED COST MAP**************************/
+// Straightforward way to assign cost values to the global Layer
+// A cost map is provided by the user, having the same size as the global layer
 bool DyMuPathPlanner::setCostMap(std::vector< std::vector<double> > cost_map)
 {
     double cost;
+    if ((cost_map.size() != num_nodes_Y)||(cost_map[0].size() != num_nodes_X))
+        return false;
     for (uint j = 0; j < num_nodes_Y; j++)
         for (uint i = 0; i < num_nodes_X; i++)
         {
@@ -138,15 +128,35 @@ bool DyMuPathPlanner::setCostMap(std::vector< std::vector<double> > cost_map)
     return true;
 }
 
-
-/*****************************GET GLOBAL NODE*******************************/
-// Returns Global Node Nij
-
-globalNode* DyMuPathPlanner::getGlobalNode(uint i, uint j)
+/*******************COMPUTE COST MAP FROM SLOPE MAP****************************/
+// First, slope values are computed
+// Then, by means of the Cost LookUp Table, cost values are assigned
+// Cost may be smoothed to eliminate heavy discontinuities
+bool DyMuPathPlanner::computeCostMap(
+                    std::vector< std::vector<double> > elevation,
+                    std::vector< std::vector<double> > terrainMap,
+                    bool to_be_smoothed)
 {
-    if ((i >= global_layer[0].size())||(j >= global_layer.size()))
-        return NULL;
-    return global_layer[j][i];
+    int range = slope_range.size();
+    int numLocs = locomotion_modes.size();
+    for (uint j = 0; j < num_nodes_Y; j++)
+        for (uint i = 0; i < num_nodes_X; i++)
+        {
+            global_layer[j][i]->elevation = elevation[j][i];
+            global_layer[j][i]->terrain = terrainMap[j][i];
+        }
+    for (uint j = 0; j < num_nodes_Y; j++)
+        for (uint i = 0; i < num_nodes_X; i++)
+        {
+            calculateSlope(global_layer[j][i]);
+            calculateNominalCost(global_layer[j][i], range, numLocs,
+                                 to_be_smoothed);
+        }
+    if (to_be_smoothed)
+        for (uint j = 0; j < num_nodes_Y; j++)
+            for (uint i = 0; i < num_nodes_X; i++)
+                smoothCost(global_layer[j][i]);
+    return true;
 }
 
 
@@ -186,11 +196,10 @@ void DyMuPathPlanner::calculateSlope(globalNode* nodeTarget)
 //   (cost = raw_cost)
 
 void DyMuPathPlanner::calculateNominalCost(globalNode* nodeTarget,
+                                           int range, int numLocs,
                                            bool to_be_smoothed)
 {
     double Cdefinitive, Ccandidate, C1, C2;
-    int range = slope_range.size();
-    int numLocs = locomotion_modes.size();
 
   // Obstacles defined by input terrain map
     if(nodeTarget->terrain == 0) //Global Obstacle
@@ -299,6 +308,18 @@ void DyMuPathPlanner::smoothCost(globalNode* nodeTarget)
 }
 
 
+/*****************************GET GLOBAL NODE*******************************/
+// Returns Global Node Nij
+
+globalNode* DyMuPathPlanner::getGlobalNode(uint i, uint j)
+{
+    if ((i >= global_layer[0].size())||(j >= global_layer.size()))
+        return NULL;
+    return global_layer[j][i];
+}
+
+
+
 bool DyMuPathPlanner::setGoal(base::Waypoint wGoal)
 {
   // This function sets the Global Node nearest to the goal location
@@ -309,51 +330,56 @@ bool DyMuPathPlanner::setGoal(base::Waypoint wGoal)
     uint scaledX = (uint)(wGoal.position[0] + 0.5);
     uint scaledY = (uint)(wGoal.position[1] + 0.5);
     globalNode * candidateGoal = getGlobalNode(scaledX, scaledY);
-
   // Check whether it is the same Global Node
-    if ((candidateGoal->pose.position[0] == global_goal->pose.position[0])&&
+    if ((global_goal != NULL)&&
+        (candidateGoal->pose.position[0] == global_goal->pose.position[0])&&
         (candidateGoal->pose.position[1] == global_goal->pose.position[1]))
         return false;
 
+    std::cout << " Compared" << std::endl;
+
   // Check whether it is valid (is not placed next to an obstacle Global Node)
-    if ((candidateGoal->terrain == 0)||
-        (candidateGoal->nb4List[0]->terrain == 0)||
-        (candidateGoal->nb4List[1]->terrain == 0)||
-        (candidateGoal->nb4List[2]->terrain == 0)||
-        (candidateGoal->nb4List[3]->terrain == 0))
+    if ((candidateGoal->isObstacle)||
+        (candidateGoal->nb4List[0]->isObstacle)||
+        (candidateGoal->nb4List[1]->isObstacle)||
+        (candidateGoal->nb4List[2]->isObstacle)||
+        (candidateGoal->nb4List[3]->isObstacle))
     {
-        LOG_DEBUG_S << "Goal NOT valid, nearest global node is (" << global_goal->pose.position[0]
-                << "," << global_goal->pose.position[1] << ") and is forbidden area";
+        std::cout << "Goal NOT valid, nearest global node is (" << global_goal->pose.position[0]
+                << "," << global_goal->pose.position[1] << ") and is forbidden area" << std::endl;
         return false;
     }
 
     global_goal = candidateGoal;
     global_goal->pose.orientation = wGoal.heading;
-    LOG_DEBUG_S << "Goal is global node (" << global_goal->pose.position[0]
-              << "," << global_goal->pose.position[1] << ")";
+    std::cout << "Goal is global node (" << global_goal->pose.position[0]
+              << "," << global_goal->pose.position[1] << ")" << std::endl;
     return true;
 }
 
 
 bool DyMuPathPlanner::computeTotalCostMap(base::Waypoint wPos)
 {
-    LOG_DEBUG_S << "Computing Global Propagation";
+    std::cout << "Computing Global Propagation" << std::endl;
 
-    if (global_goal == NULL)
-        return false;
-  // To recompute the Global Propagation, first the Global Nodes used before
-  // are reset
-    resetTotalCostMap();
+    std::cout << "Goal = " << global_goal->pose.position[0] << "," << global_goal->pose.position[1] << std::endl;
 
-    global_narrowband.clear();
-    global_narrowband.push_back(global_goal);
-    global_propagated_nodes.push_back(global_goal);
-    global_goal->total_cost = 0;
+    if ((global_goal == NULL)||(global_goal->isObstacle))
+        return false;//Maybe should also cout a message
 
-    globalNode * nodeTarget = global_goal;
     globalNode * startNode = getNearestGlobalNode(wPos);
 
-    LOG_DEBUG_S << "starting global propagation loop ";
+    std::cout << "Goal = " << startNode->pose.position[0] << "," << startNode->pose.position[1] << std::endl;
+
+    if (startNode->isObstacle)
+        return false;
+
+  // In case it is not the first run, all previous computation is resetted
+    resetTotalCostMap();
+    resetGlobalNarrowBand();
+
+    globalNode * nodeTarget = global_goal;
+    std::cout << "Starting Global Propagation" << std::endl;
     while ((!global_narrowband.empty())&&(startNode->state == OPEN))
     {
         nodeTarget = minCostGlobalNode();
@@ -374,16 +400,12 @@ bool DyMuPathPlanner::computeEntireTotalCostMap()
 {
     LOG_DEBUG_S << "Computing Global Propagation";
 
-    if (global_goal == NULL)
-        return false;
-  // To recompute the Global Propagation, first the Global Nodes used before
-  // are reset
-    resetTotalCostMap();
+    if ((global_goal == NULL)||(global_goal->isObstacle))
+        return false;//Maybe should also cout a message
 
-    global_narrowband.clear();
-    global_narrowband.push_back(global_goal);
-    global_propagated_nodes.push_back(global_goal);
-    global_goal->total_cost = 0;
+  // In case it is not the first run, all previous computation is resetted
+    resetTotalCostMap();
+    resetGlobalNarrowBand();
 
     globalNode * nodeTarget = global_goal;
 
@@ -403,7 +425,6 @@ bool DyMuPathPlanner::computeEntireTotalCostMap()
 }
 
 
-
 void DyMuPathPlanner::resetTotalCostMap()
 {
     if (!global_propagated_nodes.empty())
@@ -416,6 +437,14 @@ void DyMuPathPlanner::resetTotalCostMap()
         }
         global_propagated_nodes.clear();
     }
+}
+
+void DyMuPathPlanner::resetGlobalNarrowBand()
+{
+    global_narrowband.clear();
+    global_narrowband.push_back(global_goal);
+    global_propagated_nodes.push_back(global_goal);
+    global_goal->total_cost = 0;
 }
 
 
@@ -515,7 +544,7 @@ std::vector<base::Waypoint> DyMuPathPlanner::getGlobalPath(base::Waypoint wPos)
 
       trajectory.clear();
       double tau = std::min(0.4,risk_distance);
-      wNext = calculateNextGlobalWaypoint(wPos, tau);
+      wNext = computeNextGlobalWaypoint(wPos, tau);
       trajectory.push_back(wPos);
 
       wPos = wNext;
@@ -525,7 +554,7 @@ std::vector<base::Waypoint> DyMuPathPlanner::getGlobalPath(base::Waypoint wPos)
       while(sqrt(pow((wPos.position[0] - sinkPoint.position[0]),2) +
                pow((wPos.position[1] - sinkPoint.position[1]),2)) > 2.0*global_res)
       {
-          wNext = calculateNextGlobalWaypoint(wPos, tau);
+          wNext = computeNextGlobalWaypoint(wPos, tau);
           /*if (wNext == NULL)
           {
               LOG_WARN_S << "global waypoint (" << wNext.position[0] << "," << wNext.position[1] << ") is degenerate (nan gradient)";
@@ -550,7 +579,7 @@ std::vector<base::Waypoint> DyMuPathPlanner::getGlobalPath(base::Waypoint wPos)
       return trajectory;
 }
 
-base::Waypoint DyMuPathPlanner::calculateNextGlobalWaypoint(base::Waypoint& wPos, double tau)
+base::Waypoint DyMuPathPlanner::computeNextGlobalWaypoint(base::Waypoint& wPos, double tau)
 {
 
     base::Waypoint wNext;
@@ -649,7 +678,8 @@ void DyMuPathPlanner::gradientNode(globalNode* nodeTarget, double& dnx, double& 
       }
 }
 
-double DyMuPathPlanner::interpolate(double a, double b, double g00, double g01, double g10, double g11)
+double DyMuPathPlanner::interpolate(double a, double b, double g00, double g01,
+                                    double g10, double g11)
 {
     return g00 + (g10 - g00)*a + (g01 - g00)*b + (g11 + g00 - g10 - g01)*a*b;
 }
@@ -658,58 +688,17 @@ double DyMuPathPlanner::interpolate(double a, double b, double g00, double g01, 
 std::string DyMuPathPlanner::getLocomotionMode(base::Waypoint wPos)
 {
     globalNode * gNode = getNearestGlobalNode(wPos);
+    return gNode->nodeLocMode;
+}
 
-    if(locomotion_modes.size() > 1)
-    {
-        double Cdefinitive, Ccandidate, C1, C2;
-        int range = slope_range.size();
-        int numLocs = locomotion_modes.size();
-        int locIndex;
+std::vector< std::vector<double> > DyMuPathPlanner::getTotalCostMap()
+{
+    std::vector< std::vector<double> > total_cost_map(num_nodes_Y);
+    for (uint i = 0; i < num_nodes_Y; i++)
+        total_cost_map[i].resize(num_nodes_X);
 
-        globalNode * gNode = getNearestGlobalNode(wPos);
-
-        if(range == 1) //Slopes are not taken into account
-        {
-            Cdefinitive = cost_lutable[gNode->terrain*numLocs];
-            locIndex = 0;
-            for(uint i = 1; i<locomotion_modes.size(); i++)
-            {
-                Ccandidate = cost_lutable[gNode->terrain*numLocs + i];
-                if (Ccandidate < Cdefinitive)
-                {
-                    Cdefinitive = Ccandidate;
-                    locIndex = i;
-                }
-            }
-            return locomotion_modes[locIndex];
-        }
-        else
-        {
-            double slope_index = (gNode->slope)*180/M_PI/(slope_range.back()-slope_range.front())*(slope_range.size()-1);
-            double slope_min_index = std::floor(gNode->slope*180/M_PI);
-            double slope_max_index = std::ceil(gNode->slope*180/M_PI);
-            C1 = cost_lutable[gNode->terrain*range*numLocs + (int)slope_min_index];
-            C2 = cost_lutable[gNode->terrain*range*numLocs + (int)slope_max_index];
-            Cdefinitive = C1 + (C2-C1)*(slope_index-slope_min_index);
-            locIndex = 0;
-                /*if((nodeTarget->terrain>0)&&((nodeTarget->slope)*180/M_PI<20.0)&&((nodeTarget->slope)*180/M_PI>10.0))
-                    LOG_DEBUG_S << "checking cost -> " << Cdefinitive  << "and slope_index is" << slope_index << " and slope_min_index is " << slope_min_index <<
-                      " and slope_max_index is " << slope_max_index
-                      << " and C1 = " << C1 << " and C2 = " << C2;*/
-            for(uint i = 1; i<locomotion_modes.size();i++)
-            {
-                C1 = cost_lutable[gNode->terrain*range*numLocs + i*range + (int)slope_min_index];
-                C2 = cost_lutable[gNode->terrain*range*numLocs + i*range + (int)slope_max_index];
-                Ccandidate = C1 + (C2-C1)*(slope_index-slope_min_index);
-                if (Ccandidate < Cdefinitive)
-                {
-                    Cdefinitive = Ccandidate;
-                    locIndex = i;
-                }
-            }
-            return locomotion_modes[locIndex];
-        }
-    }
-    else
-        return locomotion_modes[0];
+    for (uint j = 0; j < global_layer.size(); j++)
+        for (uint i = 0; i < global_layer[0].size(); i++)
+            total_cost_map[j][i] = global_layer[j][i]->total_cost;
+    return total_cost_map;
 }

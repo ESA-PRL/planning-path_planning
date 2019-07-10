@@ -163,11 +163,11 @@ namespace PathPlanning_lib
           // -- FUNCTIONS --
           // Class Constructor
             DyMuPathPlanner(std::vector<double> costData,
-                         std::vector<double> slope_values,
-                         std::vector<std::string> locomotion_modes,
-                           double risk_distance,
-                           double reconnect_distance,
-                           double risk_ratio);
+                            std::vector<double> slope_values,
+                            std::vector<std::string> locomotion_modes,
+                            double risk_distance,
+                            double reconnect_distance,
+                            double risk_ratio);
           // Class Destructor
             ~DyMuPathPlanner();
           // Initialization of Global Layer using Elevation and Terrain Maps
@@ -181,26 +181,51 @@ namespace PathPlanning_lib
                                 std::vector< std::vector<double> > terrainMap,
                                 bool to_be_smoothed);
 
-          // Returns global node (i,j)
-            globalNode* getGlobalNode(uint i, uint j);
           // Slope is calculated for nodeTarget
             void calculateSlope(globalNode* nodeTarget);
 
-            bool setGoal(base::Waypoint wGoal);
-
             void calculateNominalCost(globalNode* nodeTarget,
+                                      int range, int numLocs,
                                       bool to_be_smoothed);
 
             void smoothCost(globalNode* nodeTarget);
+
+          // Returns global node (i,j)
+            globalNode* getGlobalNode(uint i, uint j);
+
+            bool setGoal(base::Waypoint wGoal);
 
             bool computeTotalCostMap(base::Waypoint wPos);
             bool computeEntireTotalCostMap();
 
             void resetTotalCostMap();
+            void resetGlobalNarrowBand();
+
+            void propagateGlobalNode(globalNode* nodeTarget);
 
             globalNode* minCostGlobalNode();
 
-            void propagateGlobalNode(globalNode* nodeTarget);
+            globalNode* getNearestGlobalNode(base::Pose2D pos);
+            globalNode* getNearestGlobalNode(base::Waypoint wPos);
+
+            std::vector<base::Waypoint> getNewPath(base::Waypoint wPos);
+
+            std::vector<base::Waypoint> getGlobalPath(base::Waypoint wPos);
+
+            base::Waypoint computeNextGlobalWaypoint(base::Waypoint& wPos,
+                                                       double tau);
+
+            void gradientNode(globalNode* nodeTarget, double& dnx, double& dny);
+
+            double interpolate(double a, double b, double g00, double g01, double g10, double g11);
+
+            std::string getLocomotionMode(base::Waypoint wPos);
+
+            std::vector< std::vector<double> > getTotalCostMap();
+
+
+
+          // LOCAL PATH REPAIRING
 
             void createLocalMap(globalNode* gNode);
 
@@ -208,9 +233,6 @@ namespace PathPlanning_lib
             localNode* getLocalNode(base::Waypoint wPos);
 
             void expandGlobalNode(globalNode* gNode);
-
-            globalNode* getNearestGlobalNode(base::Pose2D pos);
-            globalNode* getNearestGlobalNode(base::Waypoint wPos);
 
             bool computeLocalPlanning(base::Waypoint wPos,
                                   base::samples::frame::Frame traversabilityMap,
@@ -241,20 +263,19 @@ namespace PathPlanning_lib
             std::vector<base::Waypoint> getLocalPath(localNode * lSetNode,
                                                      base::Waypoint wInit,
                                                      double tau);
-            std::vector<base::Waypoint> getGlobalPath(base::Waypoint wPos);
 
-            std::vector<base::Waypoint> getNewPath(base::Waypoint wPos);
+
+
 
             bool computeLocalWaypointGDM(base::Waypoint& wPos, double tau);
             base::Waypoint computeLocalWaypointDijkstra(localNode * lNode);
-            base::Waypoint calculateNextGlobalWaypoint(base::Waypoint& wPos, double tau);
+
 
             void gradientNode(localNode* nodeTarget, double& dnx, double& dny);
-            void gradientNode(globalNode* nodeTarget, double& dnx, double& dny);
 
-            double interpolate(double a, double b, double g00, double g01, double g10, double g11);
 
-            std::string getLocomotionMode(base::Waypoint wPos);
+
+
 
             void evaluatePath(std::vector<base::Waypoint>& trajectory);
 
