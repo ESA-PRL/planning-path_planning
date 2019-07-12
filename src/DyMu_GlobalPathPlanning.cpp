@@ -143,7 +143,10 @@ bool DyMuPathPlanner::computeCostMap(
         for (uint i = 0; i < num_nodes_X; i++)
         {
             global_layer[j][i]->elevation = elevation[j][i];
-            global_layer[j][i]->terrain = terrainMap[j][i];
+            if ((i == 0)||(j==0)||(i==num_nodes_X-1)||(j==num_nodes_Y-1))
+                global_layer[j][i]->terrain = 0; //Ensures borders are obstacles
+            else
+                global_layer[j][i]->terrain = terrainMap[j][i];
         }
     for (uint j = 0; j < num_nodes_Y; j++)
         for (uint i = 0; i < num_nodes_X; i++)
@@ -327,16 +330,20 @@ bool DyMuPathPlanner::setGoal(base::Waypoint wGoal)
 
     wGoal.position[0] = wGoal.position[0]/global_res; //TODO: Take into account offset!!
     wGoal.position[1] = wGoal.position[1]/global_res;
+
+    if ((wGoal.position[0] < 0)||(wGoal.position[1] < 0))
+        return false;
+
     uint scaledX = (uint)(wGoal.position[0] + 0.5);
     uint scaledY = (uint)(wGoal.position[1] + 0.5);
     globalNode * candidateGoal = getGlobalNode(scaledX, scaledY);
-  // Check whether it is the same Global Node
-    if ((global_goal != NULL)&&
-        (candidateGoal->pose.position[0] == global_goal->pose.position[0])&&
-        (candidateGoal->pose.position[1] == global_goal->pose.position[1]))
-        return false;
 
-    std::cout << " Compared" << std::endl;
+    if ((candidateGoal == NULL)||
+        (candidateGoal->nb4List[0] == NULL)||
+        (candidateGoal->nb4List[1] == NULL)||
+        (candidateGoal->nb4List[2] == NULL)||
+        (candidateGoal->nb4List[3] == NULL))
+        return false;
 
   // Check whether it is valid (is not placed next to an obstacle Global Node)
     if ((candidateGoal->isObstacle)||
@@ -691,14 +698,32 @@ std::string DyMuPathPlanner::getLocomotionMode(base::Waypoint wPos)
     return gNode->nodeLocMode;
 }
 
-std::vector< std::vector<double> > DyMuPathPlanner::getTotalCostMap()
+std::vector< std::vector<double> > DyMuPathPlanner::getTotalCostMatrix()
 {
-    std::vector< std::vector<double> > total_cost_map(num_nodes_Y);
+    std::vector< std::vector<double> > total_cost_matrix(num_nodes_Y);
     for (uint i = 0; i < num_nodes_Y; i++)
-        total_cost_map[i].resize(num_nodes_X);
+        total_cost_matrix[i].resize(num_nodes_X);
 
-    for (uint j = 0; j < global_layer.size(); j++)
-        for (uint i = 0; i < global_layer[0].size(); i++)
-            total_cost_map[j][i] = global_layer[j][i]->total_cost;
-    return total_cost_map;
+    for (uint j = 0; j < num_nodes_Y; j++)
+        for (uint i = 0; i < num_nodes_X; i++)
+            if (global_layer[j][i]->total_cost == INF)
+                total_cost_matrix[j][i] = -1.0;
+            else
+                total_cost_matrix[j][i] = global_layer[j][i]->total_cost;
+    return total_cost_matrix;
+}
+
+std::vector< std::vector<double> > DyMuPathPlanner::getGlobalCostMatrix()
+{
+    std::vector< std::vector<double> > global_cost_matrix(num_nodes_Y);
+    for (uint i = 0; i < num_nodes_Y; i++)
+        global_cost_matrix[i].resize(num_nodes_X);
+
+    for (uint j = 0; j < num_nodes_Y; j++)
+        for (uint i = 0; i < num_nodes_X; i++)
+          if (global_layer[j][i]->isObstacle)
+              global_cost_matrix[j][i] = -1.0;
+          else
+              global_cost_matrix[j][i] = global_layer[j][i]->cost;
+    return global_cost_matrix;
 }

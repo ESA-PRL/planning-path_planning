@@ -217,12 +217,13 @@ namespace PathPlanning_lib
 
             void gradientNode(globalNode* nodeTarget, double& dnx, double& dny);
 
-            double interpolate(double a, double b, double g00, double g01, double g10, double g11);
+            double interpolate(double a, double b, double g00, double g01,
+                               double g10, double g11);
 
             std::string getLocomotionMode(base::Waypoint wPos);
 
-            std::vector< std::vector<double> > getTotalCostMap();
-
+            std::vector< std::vector<double> > getTotalCostMatrix();
+            std::vector< std::vector<double> > getGlobalCostMatrix();
 
 
           // LOCAL PATH REPAIRING
