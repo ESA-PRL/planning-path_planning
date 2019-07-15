@@ -471,32 +471,6 @@ double DyMuPathPlanner::getTotalCost(localNode* lNode)
     return w00 + (w10 - w00)*a + (w01 - w00)*b + (w11 + w00 - w10 - w01)*a*b;
 }
 
-double DyMuPathPlanner::getTotalCost(base::Waypoint wInt)
-{
-    uint i = (uint)(wInt.position[0]);
-    uint j = (uint)(wInt.position[1]);
-    double a = wInt.position[0] - (double)(i);
-    double b = wInt.position[1] - (double)(j);
-
-    globalNode * node00 = global_layer[j][i];
-    globalNode * node10 = node00->nb4List[2];
-    globalNode * node01 = node00->nb4List[3];
-    globalNode * node11 = node00->nb4List[2]->nb4List[3];
-
-    double w00 = (node00==NULL)?INF:node00->total_cost;
-    double w10 = (node10==NULL)?INF:node10->total_cost;
-    double w01 = (node01==NULL)?INF:node01->total_cost;
-    double w11 = (node11==NULL)?INF:node11->total_cost;
-
-    /* LOG_DEBUG_S << "debugging";
-    LOG_DEBUG_S << " - w00 = " << w00;
-    LOG_DEBUG_S << " - w00 = " << w01;
-    LOG_DEBUG_S << " - w00 = " << w00;
-    LOG_DEBUG_S << " - w00 = " << w00;*/
-
-    return w00 + (w10 - w00)*a + (w01 - w00)*b + (w11 + w00 - w10 - w01)*a*b;
-}
-
 void DyMuPathPlanner::expandRisk()
 {
     LOG_DEBUG_S << "starting risk expansion";

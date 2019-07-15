@@ -162,7 +162,9 @@ bool DyMuPathPlanner::computeCostMap(
     return true;
 }
 
-
+/*************************COMPUTATION OF SLOPE*********************************/
+// Slope is computed for a Global Node based on the values of elevation assigned
+// to itself and its neighbours
 void DyMuPathPlanner::calculateSlope(globalNode* nodeTarget)
 {
     double dx, dy;
@@ -316,7 +318,7 @@ void DyMuPathPlanner::smoothCost(globalNode* nodeTarget)
 
 globalNode* DyMuPathPlanner::getGlobalNode(uint i, uint j)
 {
-    if ((i >= global_layer[0].size())||(j >= global_layer.size()))
+    if ((i >= num_nodes_X)||(j >= num_nodes_Y))
         return NULL;
     return global_layer[j][i];
 }
@@ -351,32 +353,21 @@ bool DyMuPathPlanner::setGoal(base::Waypoint wGoal)
         (candidateGoal->nb4List[1]->isObstacle)||
         (candidateGoal->nb4List[2]->isObstacle)||
         (candidateGoal->nb4List[3]->isObstacle))
-    {
-        std::cout << "Goal NOT valid, nearest global node is (" << global_goal->pose.position[0]
-                << "," << global_goal->pose.position[1] << ") and is forbidden area" << std::endl;
         return false;
-    }
 
     global_goal = candidateGoal;
     global_goal->pose.orientation = wGoal.heading;
-    std::cout << "Goal is global node (" << global_goal->pose.position[0]
-              << "," << global_goal->pose.position[1] << ")" << std::endl;
     return true;
 }
 
 
 bool DyMuPathPlanner::computeTotalCostMap(base::Waypoint wPos)
 {
-    std::cout << "Computing Global Propagation" << std::endl;
-
-    std::cout << "Goal = " << global_goal->pose.position[0] << "," << global_goal->pose.position[1] << std::endl;
 
     if ((global_goal == NULL)||(global_goal->isObstacle))
         return false;//Maybe should also cout a message
 
     globalNode * startNode = getNearestGlobalNode(wPos);
-
-    std::cout << "Goal = " << startNode->pose.position[0] << "," << startNode->pose.position[1] << std::endl;
 
     if (startNode->isObstacle)
         return false;
@@ -386,7 +377,6 @@ bool DyMuPathPlanner::computeTotalCostMap(base::Waypoint wPos)
     resetGlobalNarrowBand();
 
     globalNode * nodeTarget = global_goal;
-    std::cout << "Starting Global Propagation" << std::endl;
     while ((!global_narrowband.empty())&&(startNode->state == OPEN))
     {
         nodeTarget = minCostGlobalNode();
@@ -726,4 +716,34 @@ std::vector< std::vector<double> > DyMuPathPlanner::getGlobalCostMatrix()
           else
               global_cost_matrix[j][i] = global_layer[j][i]->cost;
     return global_cost_matrix;
+}
+
+double DyMuPathPlanner::getTotalCost(base::Waypoint wInt)
+{
+    uint i = (uint)(wInt.position[0]/global_res);
+    uint j = (uint)(wInt.position[1]/global_res);
+    double a = wInt.position[0] - (double)(i);
+    double b = wInt.position[1] - (double)(j);
+
+    globalNode * node00 = global_layer[j][i];
+    globalNode * node10 = node00->nb4List[2];
+    globalNode * node01 = node00->nb4List[3];
+    globalNode * node11 = node00->nb4List[2]->nb4List[3];
+
+    if (((node00==NULL)||(node10==NULL)||(node01==NULL)||(node11==NULL))||
+       ((node00->state==OPEN)||(node10->state==OPEN)||(node01->state==OPEN)||
+       (node11->state==OPEN)))
+    {
+        globalNode* nearestNode = getNearestGlobalNode(wInt);
+        return nearestNode->total_cost;
+    }
+    else
+    {
+        double w00 = node00->total_cost;
+        double w10 = node10->total_cost;
+        double w01 = node01->total_cost;
+        double w11 = node11->total_cost;
+        return w00 + (w10 - w00)*a + (w01 - w00)*b +
+               (w11 + w00 - w10 - w01)*a*b;
+    }
 }

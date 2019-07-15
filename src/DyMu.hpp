@@ -225,6 +225,7 @@ namespace PathPlanning_lib
             std::vector< std::vector<double> > getTotalCostMatrix();
             std::vector< std::vector<double> > getGlobalCostMatrix();
 
+            double getTotalCost(base::Waypoint wInt);
 
           // LOCAL PATH REPAIRING
 
@@ -250,8 +251,6 @@ namespace PathPlanning_lib
             void setHorizonCost(localNode* horizonNode);
 
             double getTotalCost(localNode* lNode);
-
-            double getTotalCost(base::Waypoint wInt);
 
             localNode * computeLocalPropagation(base::Waypoint wInit, base::Waypoint wOvertake, bool keepOldWaypoints);
 
