@@ -19,15 +19,10 @@
 
 using namespace PathPlanning_lib;
 
-DyMuPathPlanner::DyMuPathPlanner(std::vector<double> costData,
-                           std::vector<double> slope_values,
-                           std::vector<std::string> locomotion_modes,
-                           double risk_distance,
-                           double reconnect_distance,
-                           double risk_ratio):
-                           cost_lutable(costData),
-                           slope_range(slope_values),
-                           locomotion_modes(locomotion_modes),
+/*****************************CONSTRUCTOR**************************************/
+DyMuPathPlanner::DyMuPathPlanner(double risk_distance,
+                                 double reconnect_distance,
+                                 double risk_ratio):
                            risk_distance(risk_distance),
                            reconnect_distance(reconnect_distance),
                            risk_ratio(risk_ratio)
@@ -35,6 +30,8 @@ DyMuPathPlanner::DyMuPathPlanner(std::vector<double> costData,
     global_goal = NULL;
 }
 
+
+/******************************DESTRUCTOR**************************************/
 DyMuPathPlanner::~DyMuPathPlanner()
 {
 }
@@ -129,14 +126,33 @@ bool DyMuPathPlanner::setCostMap(std::vector< std::vector<double> > cost_map)
 }
 
 /*******************COMPUTE COST MAP FROM SLOPE MAP****************************/
+// - cost_lutable = LookUp Table of cost in the form of an array
+// - slope_range = discrete series of slope values
+// - locomotion_modes = strings indicating the locomotion mode of the vehicle
+// Example:
+//     Slope = [S1, S2, S3] <-- This is a sorted array!
+//                Locomotion 1  -    Locomotion 2
+// Terrain 1      C1 - C2 - C3  -    C4 - C5 - C6
+// Terrain 2      C7 - C8 - C9  -  C10 - C11 - C12
+// Then:
+// - cost_lutable = [Cost1,Cost2,Cost3,Cost4,Cost5,Cost6,Cost7,Cost8,Cost9]
+// - slope_range = [Slope1,Slope2,Slope3,Slope4,Slope5]
+// - locomotion_modes = [Locomotion1]
+
 // First, slope values are computed
 // Then, by means of the Cost LookUp Table, cost values are assigned
 // Cost may be smoothed to eliminate heavy discontinuities
-bool DyMuPathPlanner::computeCostMap(
-                    std::vector< std::vector<double> > elevation,
-                    std::vector< std::vector<double> > terrainMap,
-                    bool to_be_smoothed)
+bool DyMuPathPlanner::computeCostMap( std::vector<double> costData,
+                                      std::vector<double> slope_values,
+                                      std::vector<std::string> locomotionModes,
+                                  std::vector< std::vector<double> > elevation,
+                                 std::vector< std::vector<double> > terrainMap,
+                                 bool to_be_smoothed)
 {
+    this->cost_lutable = costData;
+    this->slope_range = slope_values;
+    this->locomotion_modes = locomotionModes;
+
     int range = slope_range.size();
     int numLocs = locomotion_modes.size();
     for (uint j = 0; j < num_nodes_Y; j++)
@@ -148,6 +164,7 @@ bool DyMuPathPlanner::computeCostMap(
             else
                 global_layer[j][i]->terrain = terrainMap[j][i];
         }
+    std::cout << "Elevation is computed" << std::endl;
     for (uint j = 0; j < num_nodes_Y; j++)
         for (uint i = 0; i < num_nodes_X; i++)
         {
@@ -206,20 +223,23 @@ void DyMuPathPlanner::calculateNominalCost(globalNode* nodeTarget,
 {
     double Cdefinitive, Ccandidate, C1, C2;
 
+    double Cmax = *std::max_element(cost_lutable.begin(), cost_lutable.end());
+
+
   // Obstacles defined by input terrain map
     if(nodeTarget->terrain == 0) //Global Obstacle
     {
-        nodeTarget->raw_cost = cost_lutable[0];
+        nodeTarget->raw_cost = Cmax;
         nodeTarget->isObstacle = true;
         if (!to_be_smoothed)
-            nodeTarget->cost = cost_lutable[0];
+            nodeTarget->cost = Cmax;
 
         for (uint i = 0; i<4; i++)
             if (!nodeTarget->isObstacle)
             {
-                nodeTarget->nb4List[i]->raw_cost = cost_lutable[0];
+                nodeTarget->nb4List[i]->raw_cost = Cmax;
                 if (!to_be_smoothed)
-                    nodeTarget->nb4List[i]->cost = cost_lutable[0];
+                    nodeTarget->nb4List[i]->cost = Cmax;
             }
     }
     else if(range == 1) //Slopes are not taken into account
@@ -242,23 +262,23 @@ void DyMuPathPlanner::calculateNominalCost(globalNode* nodeTarget,
         // In case the slope is higher than the maximum, it is an obstacle
         if(slope_index > (slope_range.size()-1))
         {
-            nodeTarget->raw_cost = cost_lutable[0];
+            nodeTarget->raw_cost = Cmax;
             nodeTarget->isObstacle = true;
             if (!to_be_smoothed)
-                nodeTarget->cost = cost_lutable[0];
+                nodeTarget->cost = Cmax;
             for (uint i = 0; i<4; i++)
                 if (!nodeTarget->isObstacle)
                 {
-                    nodeTarget->nb4List[i]->raw_cost = cost_lutable[0];
+                    nodeTarget->nb4List[i]->raw_cost = Cmax;
                     if (!to_be_smoothed)
-                        nodeTarget->nb4List[i]->cost = cost_lutable[0];
+                        nodeTarget->nb4List[i]->cost = Cmax;
                 }
         }
         else
         {
             double slope_min_index = std::floor(slope_index);
             double slope_max_index = std::ceil(slope_index);
-            Cdefinitive = cost_lutable[0];
+            Cdefinitive = Cmax;
             if (numLocs > 1)
             {
                 for(uint i = 1; i<locomotion_modes.size();i++)
@@ -447,7 +467,7 @@ void DyMuPathPlanner::resetGlobalNarrowBand()
 
 void DyMuPathPlanner::propagateGlobalNode(globalNode* nodeTarget)
 {
-    double Tx,Ty,T,C;
+    double Tx,Ty,T,C,K;
     std::string L;
   // Neighbor Propagators Tx and Ty
     if(((nodeTarget->nb4List[0] != NULL))&&((nodeTarget->nb4List[3] != NULL)))
@@ -472,12 +492,13 @@ void DyMuPathPlanner::propagateGlobalNode(globalNode* nodeTarget)
 
   // Cost Function to obtain optimal power and locomotion mode
     C = global_res*(nodeTarget->cost);
+    K = (1 - nodeTarget->obstacle_ratio);
 
   // Eikonal Equation
     if ((fabs(Tx-Ty)<C)&&(Tx < INF)&&(Ty < INF))
         T = (Tx+Ty+sqrt(2*pow(C,2.0) - pow((Tx-Ty),2.0)))/2;
     else
-        T = fmin(Tx,Ty) + C;
+        T = fmin(Tx,Ty) + C/K;
 
     if(T < nodeTarget->total_cost)
     {
@@ -714,7 +735,7 @@ std::vector< std::vector<double> > DyMuPathPlanner::getGlobalCostMatrix()
           if (global_layer[j][i]->isObstacle)
               global_cost_matrix[j][i] = -1.0;
           else
-              global_cost_matrix[j][i] = global_layer[j][i]->cost;
+              global_cost_matrix[j][i] = global_layer[j][i]->cost/((1 - global_layer[j][i]->obstacle_ratio));
     return global_cost_matrix;
 }
 

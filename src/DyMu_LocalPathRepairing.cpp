@@ -183,10 +183,10 @@ localNode* DyMuPathPlanner::getLocalNode(base::Waypoint wPos)
 }
 
 bool DyMuPathPlanner::computeLocalPlanning(base::Waypoint wPos,
-                                    base::samples::frame::Frame traversabilityMap,
-                                    double res,
-                                    std::vector<base::Waypoint>& trajectory,
-                                    bool keepOldWaypoints, base::Time &localTime)
+                                  base::samples::frame::Frame traversabilityMap,
+                                  double res,
+                                  std::vector<base::Waypoint>& trajectory,
+                                  bool keepOldWaypoints, base::Time &localTime)
 {
 
     localNode* lNode;
@@ -236,24 +236,50 @@ bool DyMuPathPlanner::computeLocalPlanning(base::Waypoint wPos,
                 //LOG_DEBUG_S << "local node pos = "  << lNode->global_pose.position[0] << "," << lNode->global_pose.position[1];
                 gNode = getNearestGlobalNode(lNode->parent_pose);
                 //LOG_DEBUG_S << "global node pos = "  << gNode->pose.position[0] << "," << gNode->pose.position[1];
-                if ((!lNode->isObstacle)&&((value != 0)||(gNode->isObstacle))) //If pixel is obstacle (value == 1)
+                if ((!lNode->isObstacle)&&(value != 0)) //If pixel is obstacle (value == 1)
                 {
-                lNode->isObstacle = true;
-                local_expandable_obstacles.push_back(lNode);
-                lNode->risk = 1.0;
-                isBlocked = isBlockingObstacle(lNode, maxIndex, minIndex, trajectory);//See here if its blocking (and which waypoint)
-                pathBlocked = (pathBlocked)?true:isBlocked;// Path is blocked if isBlocked is true at least once
-                //pathBlocked |= isBlocked;
+                    if (!gNode->isObstacle) //TODO: update cost here!!
+                    {
+                        gNode->obstacle_ratio += 1/((float)res_ratio*(float)res_ratio);
+                        if (gNode->obstacle_ratio >= .5)//TODO: Make this configurable and relate it with the Cmax
+                        {
+                            gNode->isObstacle = true;
+                        }
+                    }
                 }
             }
         }
     }
-
+    for (uint j = 0; j < height; j++)
+    {
+        for (uint i = 0; i < width; i++)
+        {
+            pos.position[0] = offsetX + i*res;
+            pos.position[1] = offsetY - j*res; // Image convention (Y pointing down)
+            if((pos.position[0] > -0.5)&&(pos.position[0] < globalSizeX)&&(pos.position[1] > -0.5)&&(pos.position[1] < globalSizeY))
+            {
+                uint8_t value = traversabilityMap.image[j*traversabilityMap.getRowSize()+i*traversabilityMap.getPixelSize()]; //TODO: check if this is correct!!
+                //LOG_DEBUG_S << "pos = "  << pos.position[0] << "," << pos.position[1];
+                lNode = getLocalNode(pos);
+                //LOG_DEBUG_S << "local node pos = "  << lNode->global_pose.position[0] << "," << lNode->global_pose.position[1];
+                gNode = getNearestGlobalNode(lNode->parent_pose);
+                //LOG_DEBUG_S << "global node pos = "  << gNode->pose.position[0] << "," << gNode->pose.position[1];
+                if ((!lNode->isObstacle)&&((value != 0)||(gNode->isObstacle))) //If pixel is obstacle (value == 1)
+                {
+                    lNode->isObstacle = true;
+                    local_expandable_obstacles.push_back(lNode);
+                    lNode->risk = 1.0;
+                    isBlocked = isBlockingObstacle(lNode, maxIndex, minIndex, trajectory);//See here if its blocking (and which waypoint)
+                    pathBlocked = (pathBlocked)?true:isBlocked;// Path is blocked if isBlocked is true at least once
+                }
+            }
+        }
+    }
     if(pathBlocked)
     {
         LOG_DEBUG_S << std::endl << "-- LOCAL REPAIRING STARTED--";
         base::Time tInit = base::Time::now();
-        std::cout <<  "Time now in library: " << tInit << std::endl;
+        std::cout <<  "Max Index: " << maxIndex << std::endl;
         expandRisk();
         repairPath(trajectory, wPos, current_path, maxIndex, keepOldWaypoints);
         localTime = base::Time::now() - tInit;
@@ -263,20 +289,22 @@ bool DyMuPathPlanner::computeLocalPlanning(base::Waypoint wPos,
     return false;
 }
 
-/* REPAIR PATH function
-   This function is in charge of computing a series of Local Waypoints that are connected to Global Waypoints placed further than the obstacle area of effect (risky area)
-*/
-void DyMuPathPlanner::repairPath(std::vector<base::Waypoint>& trajectory, base::Waypoint wInit, std::vector<base::Waypoint>& current_path, uint index, bool keepOldWaypoints)
+/*****************************PATH REPAIRING***********************************/
+
+void DyMuPathPlanner::repairPath(std::vector<base::Waypoint>& trajectory,
+                                 base::Waypoint wInit,
+                                 std::vector<base::Waypoint>& current_path,
+                                 uint index, bool keepOldWaypoints)
 {
     // Previous trajectory is erased, information about previous Global Waypoints is stored in current_path
     trajectory.clear();
 
 	// It may happen a path with no Global Waypoints is intended to be repaired (since trajectory was cleared in previous repairing)
-	if (current_path.empty())
-	{
-		LOG_DEBUG_S << "repairing operation is called, but there are not Global Waypoints in the trajectory. Repairing aborted.";
-		return;
-	}
+	  if (current_path.empty())
+	  {
+		    std::cout << "repairing operation is called, but there are not Global Waypoints in the trajectory. Repairing aborted." << std::endl;
+		    return;
+	  }
 
     //oldIndex is pointing to the Global Waypoint placed after risk area, which is initially pointed by index as well
 	//index increases to point to another Global Waypoint placed further than reconnect_distance to the one pointed by oldIndex
@@ -290,19 +318,21 @@ void DyMuPathPlanner::repairPath(std::vector<base::Waypoint>& trajectory, base::
     if(index >= current_path.size()) //This means last waypoint is on forbidden area (either on risky area or under reconnect_distance from a previous Global Waypoint)
     {
         trajectory.push_back(wInit);
-        LOG_DEBUG_S << "initial number of Global Waypoints was " << current_path.size();
-        LOG_DEBUG_S << "Global Waypoint to reconnect does not exist, variable index is " << index;
+        std::cout << "initial number of Global Waypoints was " << current_path.size() << std::endl;
+        std::cout << "Global Waypoint to reconnect does not exist, variable index is " << index << std::endl;
         current_path.clear();
-        LOG_DEBUG_S << "trajectory is cleared due to goal placed on forbidden area";
+        std::cout << "trajectory is cleared due to goal placed on forbidden area" << std::endl;
     }
     else
     {
+        if (index == current_path.size()-1)
+            keepOldWaypoints = 1;
         localNode * lSet = computeLocalPropagation(wInit, current_path[index], keepOldWaypoints);
         if (lSet == NULL) //Local Planning is aborted because of having entered obstacle area
         {
-            LOG_DEBUG_S << "repairing aborted";
+            std::cout << "repairing aborted" << std::endl;
             LOG_DEBUG_S << "index = " << index;
-            LOG_DEBUG_S << "global stops at (" << current_path[index].position[0] << "," << current_path[index].position[1] << ")";
+            std::cout << "global stops at (" << current_path[index].position[0] << "," << current_path[index].position[1] << ")" << std::endl;
             trajectory.push_back(wInit);
             current_path.clear();
         }
@@ -339,8 +369,8 @@ void DyMuPathPlanner::repairPath(std::vector<base::Waypoint>& trajectory, base::
 
 void DyMuPathPlanner::repairPath(std::vector<base::Waypoint>& trajectory, uint minIndex, uint maxIndex)
 {
-    LOG_DEBUG_S << "trajectory from waypoint " << minIndex << " to waypoint " << maxIndex << " must be repaired";
-    LOG_DEBUG_S << "size of current_path is " << current_path.size();
+    std::cout << "trajectory from waypoint " << minIndex << " to waypoint " << maxIndex << " must be repaired" << std::endl;
+    std::cout << "size of current_path is " << current_path.size() << std::endl;
     uint indexLim = 0;
 
     for(uint i = minIndex; i>0;i--)
@@ -556,6 +586,7 @@ localNode * DyMuPathPlanner::computeLocalPropagation(base::Waypoint wInit, base:
   //wInit is the waypoint from which the path is repaired
 
     double Tovertake = getTotalCost(wOvertake);
+    std::cout << "Overtake is " << wOvertake.position[0] << "," << wOvertake.position[1] << " and T associated is " << Tovertake << std::endl;
     double distReference = sqrt(
               pow(wInit.position[0]-wOvertake.position[0],2)
             + pow(wInit.position[1]-wOvertake.position[1],2));
@@ -573,14 +604,19 @@ localNode * DyMuPathPlanner::computeLocalPropagation(base::Waypoint wInit, base:
     }
 
   // Initializing the Narrow Band
-    LOG_DEBUG_S << "initializing Narrow Band";
+    std::cout << "initializing Narrow Band" << std::endl;
 
     local_agent = getLocalNode(wInit);
+
+    std::cout << "initializing Narrow Band" << std::endl;
+
+
     if(local_agent->isObstacle)
     {
-        LOG_DEBUG_S << "actual pose is within obstacle area, local repairing aborted";
+        std::cout << "actual pose is within obstacle area, local repairing aborted" << std::endl;
         return NULL;
     }
+
     local_agent->deviation = 0;
     local_agent->total_cost = getTotalCost(local_agent);
     local_agent->state = CLOSED;
@@ -593,14 +629,14 @@ localNode * DyMuPathPlanner::computeLocalPropagation(base::Waypoint wInit, base:
     localNode * nodeTarget;
     localNode * nodeEnd = NULL;
     if (keepOldWaypoints)
-        nodeEnd = getLocalNode(wOvertake);
-
-    if(nodeEnd->isObstacle)
     {
-        LOG_DEBUG_S << "nodeEnd is obstacle";
-        return NULL;
+        nodeEnd = getLocalNode(wOvertake);
+        if(nodeEnd->isObstacle)
+        {
+            std::cout << "nodeEnd is obstacle" << std::endl;
+            return NULL;
+        }
     }
-
     globalNode* gNode;
 
 
@@ -608,8 +644,8 @@ localNode * DyMuPathPlanner::computeLocalPropagation(base::Waypoint wInit, base:
 
 
   // Propagation Loop
-    LOG_DEBUG_S << "starting local propagation loop";
-    LOG_DEBUG_S << "initial risk is " << local_agent->risk;
+    std::cout << "starting local propagation loop" << std::endl;
+    std::cout << "initial risk is " << local_agent->risk << std::endl;
 
     while(true)//TODO: Control this
     {
@@ -1003,4 +1039,51 @@ void DyMuPathPlanner::evaluatePath(std::vector<base::Waypoint>& trajectory)
             repairPath(trajectory, minIndex, maxIndex);
         }
 
+}
+
+std::vector< std::vector<double> > DyMuPathPlanner::getRiskMatrix(base::Waypoint rover_pos)
+{
+    // Here we cover a square portion of the global layer, centered at the
+    // global node closest to the robot
+    // global_side_num is the number of global nodes at a side of the square
+    uint half_num= 10;
+    uint global_side_num = 2*half_num + 1;
+    // local_side_num is the number of local nodes at the side
+    uint local_side_num = global_side_num*res_ratio;
+
+    globalNode* gNode = getNearestGlobalNode(rover_pos);
+    globalNode* node_target;
+    int coord_x;
+    int coord_y;
+
+    std::vector< std::vector<double> > risk_matrix(local_side_num);
+    for (uint i = 0; i < local_side_num; i++)
+        risk_matrix[i].resize(local_side_num);
+
+    /*std::cout << "LocalSideNum = " << local_side_num << std::endl;
+    std::cout << "Resolution Ratio = " << res_ratio << std::endl;
+    std::cout << "Global Node = " << gNode->pose.position[0] << "," << gNode->pose.position[1] << std::endl;*/
+
+    for (uint j = 0; j < global_side_num; j++)
+        for (uint i = 0; i < global_side_num; i++)
+        {
+            coord_x = gNode->pose.position[0] - half_num + i;
+            coord_y = gNode->pose.position[1] - half_num + j;
+            node_target = getGlobalNode(coord_x,coord_y);
+            //std::cout << "Target Node Coordinates = " << coord_x << "," << coord_y << std::endl;
+            //std::cout << "Global Node Position = " << node_target->pose.position[0] << "," << node_target->pose.position[1] << std::endl;
+            if ((node_target!=NULL)&&(node_target->hasLocalMap))
+            {
+                //std::cout << "It is expandable" << std::endl;
+                for (uint l = 0; l<res_ratio; l++)
+                    for(uint k = 0; k<res_ratio; k++)
+                    {
+                        risk_matrix[l+j*res_ratio][k+i*res_ratio] =
+                                                    node_target->localMap[l][k]->risk;
+                        //std::cout << "Risk Matrix coordinates " << (k+i*res_ratio) << "," << (l+j*res_ratio) << std::endl;
+                    }
+            }
+        }
+    //std::cout << "Done" << std::endl;
+    return risk_matrix;
 }

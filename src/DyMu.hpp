@@ -162,10 +162,7 @@ namespace PathPlanning_lib
 
           // -- FUNCTIONS --
           // Class Constructor
-            DyMuPathPlanner(std::vector<double> costData,
-                            std::vector<double> slope_values,
-                            std::vector<std::string> locomotion_modes,
-                            double risk_distance,
+            DyMuPathPlanner(double risk_distance,
                             double reconnect_distance,
                             double risk_ratio);
           // Class Destructor
@@ -177,7 +174,10 @@ namespace PathPlanning_lib
 
             bool setCostMap(std::vector< std::vector<double> > cost_map);
 
-            bool computeCostMap(std::vector< std::vector<double> > elevation,
+            bool computeCostMap(std::vector<double> costData,
+                            std::vector<double> slope_values,
+                            std::vector<std::string> locomotionModes,
+                            std::vector< std::vector<double> > elevation,
                                 std::vector< std::vector<double> > terrainMap,
                                 bool to_be_smoothed);
 
@@ -283,6 +283,8 @@ namespace PathPlanning_lib
 
             void repairPath(std::vector<base::Waypoint>& trajectory, uint minIndex, uint maxIndex);
             void repairPath(std::vector<base::Waypoint>& trajectory, base::Waypoint wInit, std::vector<base::Waypoint>& current_path, uint index, bool keepOldWaypoints);
+
+            std::vector< std::vector<double> > getRiskMatrix(base::Waypoint rover_pos);
     };
 
 } // end namespace
