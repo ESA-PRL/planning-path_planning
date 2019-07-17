@@ -52,16 +52,16 @@ namespace PathPlanning_lib
         node_state state;
         std::vector<localNode*> nb4List;
         bool isObstacle;
-        localNode(uint x_, uint y_, base::Pose2D _parent_pose)
+        localNode(uint x_, uint y_, base::Pose2D _parent_pose, bool parent_is_obstacle)
         {
             pose.position[0] = (double)x_;
             pose.position[1] = (double)y_;
             parent_pose = _parent_pose;
             state = OPEN;
-            risk = 0;
             deviation = INF;
             total_cost = INF;
-            isObstacle = false;
+            isObstacle = parent_is_obstacle;
+            risk = isObstacle?1.0:0.0;
         }
     };
 
@@ -76,7 +76,8 @@ namespace PathPlanning_lib
         bool hasLocalMap; //Has it localmap?
         double raw_cost;
         double cost;
-        double obstacle_ratio; //Ratio of obstacle area in the global node area
+        double hazard_density; //Ratio of obstacle area in the global node area
+        double trafficability;
         double total_cost;
         unsigned int terrain;
         std::vector< std::vector<localNode*> > localMap;
@@ -100,7 +101,8 @@ namespace PathPlanning_lib
             total_cost = INF;
             state = OPEN;
             nodeLocMode = "DONT_CARE";
-            obstacle_ratio = 0.0;
+            hazard_density = 0.0;
+            trafficability = 1.0;
         }
     };
 
@@ -224,6 +226,8 @@ namespace PathPlanning_lib
 
             std::vector< std::vector<double> > getTotalCostMatrix();
             std::vector< std::vector<double> > getGlobalCostMatrix();
+            std::vector< std::vector<double> > getHazardDensityMatrix();
+            std::vector< std::vector<double> > getTrafficabilityMatrix();
 
             double getTotalCost(base::Waypoint wInt);
 
@@ -234,7 +238,7 @@ namespace PathPlanning_lib
             localNode* getLocalNode(base::Pose2D pos);
             localNode* getLocalNode(base::Waypoint wPos);
 
-            void expandGlobalNode(globalNode* gNode);
+            void subdivideGlobalNode(globalNode* gNode);
 
             bool computeLocalPlanning(base::Waypoint wPos,
                                   base::samples::frame::Frame traversabilityMap,

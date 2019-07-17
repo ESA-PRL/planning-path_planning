@@ -120,7 +120,11 @@ bool DyMuPathPlanner::setCostMap(std::vector< std::vector<double> > cost_map)
             cost = cost_map[j][i];
             global_layer[j][i]->cost = cost;
             if (cost<=0)
+            {
                 global_layer[j][i]->isObstacle = true;
+                global_layer[j][i]->trafficability = 0.0;
+                global_layer[j][i]->hazard_density = 1.0;
+            }
         }
     return true;
 }
@@ -171,6 +175,11 @@ bool DyMuPathPlanner::computeCostMap( std::vector<double> costData,
             calculateSlope(global_layer[j][i]);
             calculateNominalCost(global_layer[j][i], range, numLocs,
                                  to_be_smoothed);
+            if (global_layer[j][i]->isObstacle)
+            {
+                global_layer[j][i]->trafficability = 0.0;
+                global_layer[j][i]->hazard_density = 1.0;
+            }
         }
     if (to_be_smoothed)
         for (uint j = 0; j < num_nodes_Y; j++)
@@ -492,13 +501,13 @@ void DyMuPathPlanner::propagateGlobalNode(globalNode* nodeTarget)
 
   // Cost Function to obtain optimal power and locomotion mode
     C = global_res*(nodeTarget->cost);
-    K = (1 - nodeTarget->obstacle_ratio);
+    //K = nodeTarget->trafficability;
 
   // Eikonal Equation
     if ((fabs(Tx-Ty)<C)&&(Tx < INF)&&(Ty < INF))
         T = (Tx+Ty+sqrt(2*pow(C,2.0) - pow((Tx-Ty),2.0)))/2;
     else
-        T = fmin(Tx,Ty) + C/K;
+        T = fmin(Tx,Ty) + C;///K;
 
     if(T < nodeTarget->total_cost)
     {
@@ -735,8 +744,32 @@ std::vector< std::vector<double> > DyMuPathPlanner::getGlobalCostMatrix()
           if (global_layer[j][i]->isObstacle)
               global_cost_matrix[j][i] = -1.0;
           else
-              global_cost_matrix[j][i] = global_layer[j][i]->cost/((1 - global_layer[j][i]->obstacle_ratio));
+              global_cost_matrix[j][i] = global_layer[j][i]->cost;
     return global_cost_matrix;
+}
+
+std::vector< std::vector<double> > DyMuPathPlanner::getHazardDensityMatrix()
+{
+    std::vector< std::vector<double> > hazard_density_matrix(num_nodes_Y);
+    for (uint i = 0; i < num_nodes_Y; i++)
+        hazard_density_matrix[i].resize(num_nodes_X);
+
+    for (uint j = 0; j < num_nodes_Y; j++)
+        for (uint i = 0; i < num_nodes_X; i++)
+            hazard_density_matrix[j][i] = global_layer[j][i]->hazard_density;
+    return hazard_density_matrix;
+}
+
+std::vector< std::vector<double> > DyMuPathPlanner::getTrafficabilityMatrix()
+{
+    std::vector< std::vector<double> > trafficability_matrix(num_nodes_Y);
+    for (uint i = 0; i < num_nodes_Y; i++)
+        trafficability_matrix[i].resize(num_nodes_X);
+
+    for (uint j = 0; j < num_nodes_Y; j++)
+        for (uint i = 0; i < num_nodes_X; i++)
+            trafficability_matrix[j][i] = global_layer[j][i]->trafficability;
+    return trafficability_matrix;
 }
 
 double DyMuPathPlanner::getTotalCost(base::Waypoint wInt)

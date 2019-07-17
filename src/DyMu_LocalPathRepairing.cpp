@@ -19,16 +19,25 @@
 
 using namespace PathPlanning_lib;
 
-void DyMuPathPlanner::createLocalMap(globalNode* gNode) //TODO: Create nb8List
+
+/***************************CREATE LOCAL MAP***********************************/
+// The global node is subdivided into local nodes, which are connected to the
+// rest forming the local layer
+void DyMuPathPlanner::createLocalMap(globalNode* gNode)
 {
-    // LOG_DEBUG_S << "creating Local Map of " << gNode->pose.position[0] << "," << gNode->pose.position[1];
+  // We set that, effectively, this global node is subdivided
     gNode->hasLocalMap = true;
+
+  // This square portion of local layer is created as a matrix
     std::vector<localNode*> nodeRow;
     for (uint j = 0; j < res_ratio; j++)
     {
         for (uint i = 0; i < res_ratio; i++)
         {
-            nodeRow.push_back(new localNode(i, j, gNode->pose));
+            nodeRow.push_back(new localNode(i, j, gNode->pose,
+                              gNode->isObstacle));
+            if (nodeRow.back()->isObstacle)
+                local_expandable_obstacles.push_back(nodeRow.back());
             nodeRow.back()->global_pose.position[0] =
                 nodeRow.back()->parent_pose.position[0] - 0.5 +
                 (0.5/(double)res_ratio) +
@@ -37,13 +46,17 @@ void DyMuPathPlanner::createLocalMap(globalNode* gNode) //TODO: Create nb8List
                 nodeRow.back()->parent_pose.position[1] - 0.5 +
                 (0.5/(double)res_ratio) +
                 nodeRow.back()->pose.position[1]*(1/(double)res_ratio);
-            nodeRow.back()->world_pose.position[0] = nodeRow.back()->global_pose.position[0]/global_res;
-            nodeRow.back()->world_pose.position[1] = nodeRow.back()->global_pose.position[1]/global_res;
+            nodeRow.back()->world_pose.position[0] =
+                             nodeRow.back()->global_pose.position[0]/global_res;
+            nodeRow.back()->world_pose.position[1] =
+                             nodeRow.back()->global_pose.position[1]/global_res;
         }
         gNode->localMap.push_back(nodeRow);
         nodeRow.clear();
     }
-  // NEIGHBOURHOOD
+
+  // NEIGHBOURHOOD is created, considering local nodes of neighbouring global
+  // nodes
     for (uint j = 0; j < res_ratio; j++)
     {
         for (uint i = 0; i < res_ratio; i++)
@@ -68,15 +81,18 @@ void DyMuPathPlanner::createLocalMap(globalNode* gNode) //TODO: Create nb8List
                 {
                     if(gNode->nb4List[0]->hasLocalMap)
                     {
-                        gNode->localMap[j][i]->nb4List.push_back(gNode->nb4List[0]->localMap[res_ratio-1][i]);
-                        gNode->nb4List[0]->localMap[res_ratio-1][i]->nb4List[3] = gNode->localMap[j][i];
+                        gNode->localMap[j][i]->nb4List.push_back(
+                                   gNode->nb4List[0]->localMap[res_ratio-1][i]);
+                        gNode->nb4List[0]->localMap[res_ratio-1][i]->nb4List[3]
+                                                        = gNode->localMap[j][i];
                     }
                     else
                         gNode->localMap[j][i]->nb4List.push_back(NULL);
                 }
             }
             else
-                gNode->localMap[j][i]->nb4List.push_back(gNode->localMap[j-1][i]);
+                gNode->localMap[j][i]->nb4List.push_back(
+                                                       gNode->localMap[j-1][i]);
 
             if (i==0)
             {
@@ -86,15 +102,18 @@ void DyMuPathPlanner::createLocalMap(globalNode* gNode) //TODO: Create nb8List
                 {
                     if(gNode->nb4List[1]->hasLocalMap)
                     {
-                        gNode->localMap[j][i]->nb4List.push_back(gNode->nb4List[1]->localMap[j][res_ratio-1]);
-                        gNode->nb4List[1]->localMap[j][res_ratio-1]->nb4List[2] = gNode->localMap[j][i];
+                        gNode->localMap[j][i]->nb4List.push_back(
+                                   gNode->nb4List[1]->localMap[j][res_ratio-1]);
+                        gNode->nb4List[1]->localMap[j][res_ratio-1]->nb4List[2]
+                                                        = gNode->localMap[j][i];
                     }
                     else
                         gNode->localMap[j][i]->nb4List.push_back(NULL);
                 }
             }
             else
-                gNode->localMap[j][i]->nb4List.push_back(gNode->localMap[j][i-1]);
+                gNode->localMap[j][i]->nb4List.push_back(
+                                                       gNode->localMap[j][i-1]);
 
             if (i==res_ratio-1)
             {
@@ -104,15 +123,18 @@ void DyMuPathPlanner::createLocalMap(globalNode* gNode) //TODO: Create nb8List
                 {
                     if(gNode->nb4List[2]->hasLocalMap)
                     {
-                        gNode->localMap[j][i]->nb4List.push_back(gNode->nb4List[2]->localMap[j][0]);
-                        gNode->nb4List[2]->localMap[j][0]->nb4List[1] = gNode->localMap[j][i];
+                        gNode->localMap[j][i]->nb4List.push_back(
+                                             gNode->nb4List[2]->localMap[j][0]);
+                        gNode->nb4List[2]->localMap[j][0]->nb4List[1] =
+                                                          gNode->localMap[j][i];
                     }
                     else
                         gNode->localMap[j][i]->nb4List.push_back(NULL);
                 }
             }
             else
-                gNode->localMap[j][i]->nb4List.push_back(gNode->localMap[j][i+1]);
+                gNode->localMap[j][i]->nb4List.push_back(
+                                                       gNode->localMap[j][i+1]);
 
             if (j==res_ratio-1)
             {
@@ -122,21 +144,26 @@ void DyMuPathPlanner::createLocalMap(globalNode* gNode) //TODO: Create nb8List
                 {
                     if(gNode->nb4List[3]->hasLocalMap)
                     {
-                        gNode->localMap[j][i]->nb4List.push_back(gNode->nb4List[3]->localMap[0][i]);
-                        gNode->nb4List[3]->localMap[0][i]->nb4List[0] = gNode->localMap[j][i];
+                        gNode->localMap[j][i]->nb4List.push_back(
+                                             gNode->nb4List[3]->localMap[0][i]);
+                        gNode->nb4List[3]->localMap[0][i]->nb4List[0] =
+                                                          gNode->localMap[j][i];
                     }
                     else
                         gNode->localMap[j][i]->nb4List.push_back(NULL);
                 }
             }
             else
-                gNode->localMap[j][i]->nb4List.push_back(gNode->localMap[j+1][i]);
+                gNode->localMap[j][i]->nb4List.push_back(
+                                                       gNode->localMap[j+1][i]);
         }
     }
 }
 
-
-void DyMuPathPlanner::expandGlobalNode(globalNode* gNode)
+/**********************SUBDIVIDE THE GLOBAL NODE*******************************/
+// If the global node was not already subdivided, do it now (and its
+// 8-neighbours just in case)
+void DyMuPathPlanner::subdivideGlobalNode(globalNode* gNode)
 {
     if(!gNode->hasLocalMap) createLocalMap(gNode);
     for (int i = 0; i<8; i++)
@@ -145,14 +172,16 @@ void DyMuPathPlanner::expandGlobalNode(globalNode* gNode)
                 createLocalMap(gNode->nb8List[i]);
 }
 
+/*************************GET CLOSEST LOCAL NODE*******************************/
+// The global node is subdivided into local nodes, which are connected to the
+// rest forming the local layer
 localNode* DyMuPathPlanner::getLocalNode(base::Pose2D pos)
 {
 
   // Locate to which global node belongs that point
     globalNode* nearestNode = getNearestGlobalNode(pos);
-    // LOG_DEBUG_S << "NearestNode is " << nearestNode->pose.position[0] << ", " << nearestNode->pose.position[1];
 
-    expandGlobalNode(nearestNode);
+    subdivideGlobalNode(nearestNode);
 
     double cornerX = nearestNode->pose.position[0] - global_res/2;
     double cornerY = nearestNode->pose.position[1] - global_res/2;
@@ -171,14 +200,14 @@ localNode* DyMuPathPlanner::getLocalNode(base::Waypoint wPos)
     globalNode* nearestNode = getNearestGlobalNode(wPos);
     // LOG_DEBUG_S << "NearestNode is " << nearestNode->pose.position[0] << ", " << nearestNode->pose.position[1];
 
-    expandGlobalNode(nearestNode);
+    subdivideGlobalNode(nearestNode);
 
     double cornerX = nearestNode->pose.position[0] - global_res/2;
     double cornerY = nearestNode->pose.position[1] - global_res/2;
     double a = wPos.position[0] - cornerX;//fmod(wPos.position[0]/global_res, cornerX);
     double b = wPos.position[1] - cornerY;//fmod(wPos.position[1]/global_res, cornerY);
     // LOG_DEBUG_S << "a = " << a << ", b = " << b;
-    //expandGlobalNode(nearestNode);
+    //subdivideGlobalNode(nearestNode);
     return nearestNode->localMap[(uint)(b*res_ratio)][(uint)(a*res_ratio)];
 }
 
@@ -203,7 +232,7 @@ bool DyMuPathPlanner::computeLocalPlanning(base::Waypoint wPos,
     uint d = (uint)(fmin(global_layer[0].size(),((wPos.position[0]  + (double)width/2*res)/global_res)));
     for (uint j = a; j < b; j++)
         for (uint i = c; i < d; i++)
-            expandGlobalNode(global_layer[j][i]);
+            subdivideGlobalNode(global_layer[j][i]);
 
   //Indexes of the minimum and maximum waypoints affected in the trajectory by obstacles
     uint minIndex = current_path.size(), maxIndex = 0;
@@ -236,34 +265,6 @@ bool DyMuPathPlanner::computeLocalPlanning(base::Waypoint wPos,
                 //LOG_DEBUG_S << "local node pos = "  << lNode->global_pose.position[0] << "," << lNode->global_pose.position[1];
                 gNode = getNearestGlobalNode(lNode->parent_pose);
                 //LOG_DEBUG_S << "global node pos = "  << gNode->pose.position[0] << "," << gNode->pose.position[1];
-                if ((!lNode->isObstacle)&&(value != 0)) //If pixel is obstacle (value == 1)
-                {
-                    if (!gNode->isObstacle) //TODO: update cost here!!
-                    {
-                        gNode->obstacle_ratio += 1/((float)res_ratio*(float)res_ratio);
-                        if (gNode->obstacle_ratio >= .5)//TODO: Make this configurable and relate it with the Cmax
-                        {
-                            gNode->isObstacle = true;
-                        }
-                    }
-                }
-            }
-        }
-    }
-    for (uint j = 0; j < height; j++)
-    {
-        for (uint i = 0; i < width; i++)
-        {
-            pos.position[0] = offsetX + i*res;
-            pos.position[1] = offsetY - j*res; // Image convention (Y pointing down)
-            if((pos.position[0] > -0.5)&&(pos.position[0] < globalSizeX)&&(pos.position[1] > -0.5)&&(pos.position[1] < globalSizeY))
-            {
-                uint8_t value = traversabilityMap.image[j*traversabilityMap.getRowSize()+i*traversabilityMap.getPixelSize()]; //TODO: check if this is correct!!
-                //LOG_DEBUG_S << "pos = "  << pos.position[0] << "," << pos.position[1];
-                lNode = getLocalNode(pos);
-                //LOG_DEBUG_S << "local node pos = "  << lNode->global_pose.position[0] << "," << lNode->global_pose.position[1];
-                gNode = getNearestGlobalNode(lNode->parent_pose);
-                //LOG_DEBUG_S << "global node pos = "  << gNode->pose.position[0] << "," << gNode->pose.position[1];
                 if ((!lNode->isObstacle)&&((value != 0)||(gNode->isObstacle))) //If pixel is obstacle (value == 1)
                 {
                     lNode->isObstacle = true;
@@ -271,6 +272,10 @@ bool DyMuPathPlanner::computeLocalPlanning(base::Waypoint wPos,
                     lNode->risk = 1.0;
                     isBlocked = isBlockingObstacle(lNode, maxIndex, minIndex, trajectory);//See here if its blocking (and which waypoint)
                     pathBlocked = (pathBlocked)?true:isBlocked;// Path is blocked if isBlocked is true at least once
+                    if(gNode->hazard_density < 1.0)
+                    {
+                        gNode->hazard_density += 1.0/(res_ratio*res_ratio);
+                    }
                 }
             }
         }
@@ -338,8 +343,35 @@ void DyMuPathPlanner::repairPath(std::vector<base::Waypoint>& trajectory,
         }
         else
         {
+          // Look for the waypoint closest to the rover position
+            double proximity, candidate_proximity, original_distance = 0, new_distance = 0;
+            uint closest_index = 0;
+            proximity = sqrt(pow(current_path[0].position[0] - wInit.position[0],2) + pow(current_path[0].position[1] - wInit.position[1],2));
+            for (uint k = 1; k<index; k++)
+            {
+                candidate_proximity = sqrt(pow(current_path[k].position[0] - wInit.position[0],2) + pow(current_path[k].position[1] - wInit.position[1],2));
+                if (candidate_proximity < proximity)
+                    closest_index = k;
+            }
+            for (uint k = closest_index; k < index; k++)
+                original_distance += sqrt(pow(current_path[k+1].position[0] - current_path[k].position[0],2) + pow(current_path[k+1].position[1] - current_path[k].position[1],2));
+            std::cout << "The length of the old segment is " << original_distance << " meters" << std::endl;
             std::vector<base::Waypoint> localPath = getLocalPath(lSet,wInit,0.4);
+            for (uint k = 0; k < localPath.size()-1; k++)
+            {
+                new_distance += sqrt(pow(localPath[k+1].position[0] - localPath[k].position[0],2) + pow(localPath[k+1].position[1] - localPath[k].position[1],2));
+                std::cout << "Local Waypoint " << k << " is " << localPath[k].position[0] << "," << localPath[k].position[1] << std::endl;
+                std::cout << "Distance is " << new_distance << std::endl;
+            }
+            std::cout << "The length of the new segment is " << new_distance << " meters" << std::endl;
+            std::cout << "Trafficability is " << (original_distance/new_distance) << std::endl;
             LOG_DEBUG_S << "local path starts at (" << localPath[0].position[0] << "," << localPath[0].position[1] << ")";
+            globalNode* gNode;
+            for (uint k = closest_index; k < index; k++)
+            {
+                gNode = getNearestGlobalNode(current_path[k]);
+                gNode->trafficability = std::min(original_distance/new_distance,gNode->trafficability);
+            }
             if (keepOldWaypoints)
             {
                 // Remove old trajectory, including one extra global waypoint, which is coincident with last local waypoint
@@ -517,7 +549,7 @@ void DyMuPathPlanner::expandRisk()
             {
                 gNode = getNearestGlobalNode(nodeTarget->nb4List[i]->parent_pose);
                 if (getNearestGlobalNode(nodeTarget->parent_pose) != gNode)
-                    expandGlobalNode(gNode);
+                    subdivideGlobalNode(gNode);
             }
             if (nodeTarget->nb4List[i] != NULL)
                 propagateRisk(nodeTarget->nb4List[i]);
@@ -664,7 +696,7 @@ localNode * DyMuPathPlanner::computeLocalPropagation(base::Waypoint wInit, base:
                 gNode = getNearestGlobalNode(nodeTarget->nb4List[i]->parent_pose);
                 // LOG_DEBUG_S << "-- global parent of neighbour is "  << gNode->pose.position[0] << "," << gNode->pose.position[1];
                 if (getNearestGlobalNode(nodeTarget->parent_pose) != gNode)
-                    expandGlobalNode(gNode);
+                    subdivideGlobalNode(gNode);
             }
             if ((nodeTarget->nb4List[i] != NULL) &&
                 (nodeTarget->nb4List[i]->state == OPEN)
