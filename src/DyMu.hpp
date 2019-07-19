@@ -52,7 +52,7 @@ namespace PathPlanning_lib
         node_state state;
         std::vector<localNode*> nb4List;
         bool isObstacle;
-        localNode(uint x_, uint y_, base::Pose2D _parent_pose, bool parent_is_obstacle)
+        localNode(uint x_, uint y_, base::Pose2D _parent_pose)
         {
             pose.position[0] = (double)x_;
             pose.position[1] = (double)y_;
@@ -60,8 +60,8 @@ namespace PathPlanning_lib
             state = OPEN;
             deviation = INF;
             total_cost = INF;
-            isObstacle = parent_is_obstacle;
-            risk = isObstacle?1.0:0.0;
+            isObstacle = false;
+            risk = 0.0;
         }
     };
 
@@ -161,6 +161,9 @@ namespace PathPlanning_lib
             localNode * local_agent;
           // Total Cost needed by the agent to reach the goal
             double remaining_total_cost;
+
+          //Index to current path in which the local path meets global
+            int reconnecting_index;
 
           // -- FUNCTIONS --
           // Class Constructor
@@ -281,14 +284,15 @@ namespace PathPlanning_lib
 
 
 
-            void evaluatePath(std::vector<base::Waypoint>& trajectory);
+            void evaluatePath(std::vector<base::Waypoint>& trajectory, bool keepOldWaypoints);
 
             bool isBlockingObstacle(localNode* obNode, uint& maxIndex, uint& minIndex, std::vector<base::Waypoint> trajectory);
 
-            void repairPath(std::vector<base::Waypoint>& trajectory, uint minIndex, uint maxIndex);
-            void repairPath(std::vector<base::Waypoint>& trajectory, base::Waypoint wInit, std::vector<base::Waypoint>& current_path, uint index, bool keepOldWaypoints);
+            //void repairPath(std::vector<base::Waypoint>& trajectory, uint minIndex, uint maxIndex);
+            int repairPath(base::Waypoint wInit, uint index, bool keepOldWaypoints);
 
             std::vector< std::vector<double> > getRiskMatrix(base::Waypoint rover_pos);
+            std::vector< std::vector<double> > getDeviationMatrix(base::Waypoint rover_pos);
     };
 
 } // end namespace

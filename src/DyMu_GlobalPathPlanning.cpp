@@ -28,6 +28,7 @@ DyMuPathPlanner::DyMuPathPlanner(double risk_distance,
                            risk_ratio(risk_ratio)
 {
     global_goal = NULL;
+    reconnecting_index = 0;
 }
 
 
@@ -500,7 +501,7 @@ void DyMuPathPlanner::propagateGlobalNode(globalNode* nodeTarget)
         Tx = nodeTarget->nb4List[1]->total_cost;
 
   // Cost Function to obtain optimal power and locomotion mode
-    C = global_res*(nodeTarget->cost);
+    C = global_res*(nodeTarget->cost)*(2 + nodeTarget->hazard_density - nodeTarget->trafficability);
     //K = nodeTarget->trafficability;
 
   // Eikonal Equation
@@ -744,7 +745,7 @@ std::vector< std::vector<double> > DyMuPathPlanner::getGlobalCostMatrix()
           if (global_layer[j][i]->isObstacle)
               global_cost_matrix[j][i] = -1.0;
           else
-              global_cost_matrix[j][i] = global_layer[j][i]->cost;
+              global_cost_matrix[j][i] = global_layer[j][i]->cost*(2 + global_layer[j][i]->hazard_density - global_layer[j][i]->trafficability);
     return global_cost_matrix;
 }
 
