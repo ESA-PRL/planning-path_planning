@@ -284,7 +284,7 @@ namespace PathPlanning_lib
 
 
 
-            void evaluatePath(std::vector<base::Waypoint>& trajectory, bool keepOldWaypoints);
+            bool evaluatePath(std::vector<base::Waypoint>& trajectory, bool keepOldWaypoints);
 
             bool isBlockingObstacle(localNode* obNode, uint& maxIndex, uint& minIndex, std::vector<base::Waypoint> trajectory);
 
