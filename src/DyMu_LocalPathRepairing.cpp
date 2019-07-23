@@ -284,7 +284,7 @@ bool DyMuPathPlanner::computeLocalPlanning(base::Waypoint wPos,
         }
 
     std::cout << " Max index = " << maxIndex << "; Min index = " << minIndex << std::endl;
-    if(pathBlocked)
+    if((pathBlocked)&&(maxIndex>minIndex))
     {
         std::cout  << "-- LOCAL REPAIRING STARTED--" << std::endl;
         base::Time tInit = base::Time::now();
@@ -497,12 +497,12 @@ bool DyMuPathPlanner::isBlockingObstacle(localNode* obNode, uint& maxIndex, uint
         maxIndex = current_path.size();
 
     // At this point, it seems is no blocking obstacle, but it could block a local waypoint yet
-    for (uint k = 0; k < trajectory.size(); k++)
+    /*for (uint k = 0; k < trajectory.size(); k++)
         if(sqrt(
             pow(obNode->world_pose.position[0]-trajectory[k].position[0],2) +
             pow(obNode->world_pose.position[1]-trajectory[k].position[1],2))
             < risk_distance)
-            return true;
+            return true;*/
 
     return isBlocked;
 }
@@ -530,16 +530,12 @@ double DyMuPathPlanner::getTotalCost(localNode* lNode)
 
 void DyMuPathPlanner::expandRisk()
 {
-    std::cout << "starting risk expansion" << std::endl;
     localNode * nodeTarget;
     globalNode* gNode;
-    std::cout << "Number of expandable nodes" << local_expandable_obstacles.size() << std::endl;
     base::Time tInit = base::Time::now(), tCurrent;
     while(!local_expandable_obstacles.empty())
     {
         nodeTarget = maxRiskNode();
-        std::cout << "number of expandable nodes is " << local_expandable_obstacles.size() <<" and current risk is " << nodeTarget->risk <<std::endl;
-        std::cout << "expanding node " << nodeTarget->pose.position[0] << " " << nodeTarget->pose.position[1] <<std::endl;
         for (uint i = 0; i<4; i++)
         {
             if ((nodeTarget->nb4List[i] != NULL)&&(!nodeTarget->nb4List[i]->isObstacle))
@@ -552,13 +548,13 @@ void DyMuPathPlanner::expandRisk()
                 propagateRisk(nodeTarget->nb4List[i]);
         }
         tCurrent = base::Time::now() - tInit;
-        if (tCurrent.toSeconds() > 1.0)
+        /*if (tCurrent.toSeconds() > 1.0)
         {
             std::cout << "ERROR propagating risk" << std::endl;
             std::cout << "Parent is " << gNode->pose.position[0] << "," << gNode->pose.position[1] << std::endl;
             std::cout << "Neighbor parent is " <<nodeTarget->nb4List[3]->parent_pose.position[0] << "," << nodeTarget->nb4List[3]->parent_pose.position[1] << std::endl;
             break;
-        }
+        }*/
     }
 }
 

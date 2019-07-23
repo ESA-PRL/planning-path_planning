@@ -169,7 +169,6 @@ bool DyMuPathPlanner::computeCostMap( std::vector<double> costData,
             else
                 global_layer[j][i]->terrain = terrainMap[j][i];
         }
-    std::cout << "Elevation is computed" << std::endl;
     for (uint j = 0; j < num_nodes_Y; j++)
         for (uint i = 0; i < num_nodes_X; i++)
         {
