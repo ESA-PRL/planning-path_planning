@@ -203,14 +203,13 @@ localNode* DyMuPathPlanner::getLocalNode(base::Waypoint wPos)
 }
 
 
-/*************************GET CLOSEST LOCAL NODE*******************************/
-// The global node is subdivided into local nodes, which are connected to the
-// rest forming the local layer
+/*************************LOCAL PATH REPAIRING*********************************/
+//
 bool DyMuPathPlanner::computeLocalPlanning(base::Waypoint wPos,
                                   base::samples::frame::Frame traversabilityMap,
                                   double res,
                                   std::vector<base::Waypoint>& trajectory,
-                                  bool keepOldWaypoints, base::Time &localTime)
+                                  base::Time &localTime)
 {
 
     localNode* lNode;
@@ -292,7 +291,10 @@ bool DyMuPathPlanner::computeLocalPlanning(base::Waypoint wPos,
         std::cout <<  "Max Index: " << maxIndex << std::endl;
         expandRisk();
         trajectory.clear();
-        reconnecting_index = repairPath(wPos, maxIndex, keepOldWaypoints);
+        reconnecting_index = repairPath(wPos, maxIndex);
+        std::cout << " The reconnecting index is " << reconnecting_index << std::endl;
+        if (repairing_approach == SWEEPING)
+            evaluatePath(reconnecting_index);
         trajectory = current_path;
         localTime = base::Time::now() - tInit;
         std::cout << "Local Time in library: " << (base::Time::now()-tInit)  << std::endl;
@@ -306,10 +308,7 @@ bool DyMuPathPlanner::computeLocalPlanning(base::Waypoint wPos,
 //  - wayp_start = waypoint from which the wave will propagate
 //  - index = points to the position in current_path where the Overtake Waypoint
 //    is located
-//  - keepOldWaypoints = if yes, conservative approach is used (aka Hazard Avoi-
-//    dance), otherwise it is used the sweeping approach (aka multiBiFM)
-int DyMuPathPlanner::repairPath(base::Waypoint wayp_start, uint index,
-                                bool keepOldWaypoints)
+int DyMuPathPlanner::repairPath(base::Waypoint wayp_start, uint index)
 {
     //std::cout << "NEW REPAIRING" << std::endl;
     //std::cout << "Initial Waypoint is " << wayp_start.position[0] << "," << wayp_start.position[1] << std::endl;
@@ -328,7 +327,7 @@ int DyMuPathPlanner::repairPath(base::Waypoint wayp_start, uint index,
 	// index increases to point to another Global Waypoint placed further than
   //   reconnect_distance to the one pointed by overtake_index
     double overtake_index;
-    if(keepOldWaypoints)
+    if(repairing_approach == CONSERVATIVE)
     {
       // In case of using the conservative approach, the propagation wave will
       // reach either the Overtake waypoint or another placed further
@@ -361,9 +360,14 @@ int DyMuPathPlanner::repairPath(base::Waypoint wayp_start, uint index,
     {
       // Last Waypoint is the goal, only Conservative Approach is permitted
         if (index == current_path.size()-1)
-            keepOldWaypoints = 1;
-        localNode * lSet = computeLocalPropagation(wayp_start, current_path[index],
-                                                   keepOldWaypoints);
+        {
+            std::cout << "Repairing is not possible, goal is too close to obsacles" << std::endl;
+            //trajectory.push_back(wayp_start);
+            current_path.clear();
+            current_path.push_back(wayp_start);
+            return -1;
+        }
+        localNode * lSet = computeLocalPropagation(wayp_start, current_path[index]);
         if (lSet == NULL) //Local Planning is aborted because of having entered obstacle area
         {
             std::cout << "repairing aborted" << std::endl;
@@ -410,7 +414,7 @@ int DyMuPathPlanner::repairPath(base::Waypoint wayp_start, uint index,
                     gNode = getNearestGlobalNode(current_path[k]);
                     gNode->trafficability = std::min(original_distance/new_distance,gNode->trafficability);
                 }
-                if (keepOldWaypoints)
+                if (repairing_approach == CONSERVATIVE)
                 {
                     // Remove old trajectory, including one extra global waypoint, which is coincident with last local waypoint
                     current_path.erase(current_path.begin(), current_path.begin() + index);
@@ -425,8 +429,7 @@ int DyMuPathPlanner::repairPath(base::Waypoint wayp_start, uint index,
                     base::Waypoint newWaypoint;
                     newWaypoint.position[0] = lSet->global_pose.position[0];
                     newWaypoint.position[1] = lSet->global_pose.position[1];
-                    current_path.clear();
-                    current_path = getGlobalPath(newWaypoint);
+                    computeGlobalPath(newWaypoint);
                     localPath.pop_back();
                     current_path.insert(current_path.begin(), localPath.begin(),localPath.end());
                     return localPath.size();
@@ -437,25 +440,19 @@ int DyMuPathPlanner::repairPath(base::Waypoint wayp_start, uint index,
             }
             else
             {
-              if (keepOldWaypoints)
+              if (repairing_approach == CONSERVATIVE)
               {
                   // Remove old trajectory, including one extra global waypoint, which is coincident with last local waypoint
                   current_path.erase(current_path.begin(), current_path.begin() + index);
                   return 0;
-                  //trajectory.insert(trajectory.end(),localPath.begin(),localPath.end());
-                  //trajectory.insert(trajectory.end(),current_path.begin(),current_path.end());
               }
               else
               {
                   base::Waypoint newWaypoint;
                   newWaypoint.position[0] = lSet->global_pose.position[0];
                   newWaypoint.position[1] = lSet->global_pose.position[1];
-                  current_path.clear();
-                  current_path = getGlobalPath(newWaypoint);
+                  computeGlobalPath(newWaypoint);
                   return 0;
-                  //current_path.erase(current_path.begin());
-                  //trajectory.insert(trajectory.end(),localPath.begin(),localPath.end());
-                  //trajectory.insert(trajectory.end(),current_path.begin(),current_path.end());
               }
             }
         }
@@ -520,10 +517,10 @@ double DyMuPathPlanner::getTotalCost(localNode* lNode)
     globalNode * node01 = node00->nb4List[3];
     globalNode * node11 = node00->nb4List[2]->nb4List[3];
 
-    double w00 = (node00==NULL)?INF:node00->total_cost;
-    double w10 = (node10==NULL)?INF:node10->total_cost;
-    double w01 = (node01==NULL)?INF:node01->total_cost;
-    double w11 = (node11==NULL)?INF:node11->total_cost;
+    double w00 = (node00==NULL)?std::numeric_limits<double>::infinity():node00->total_cost;
+    double w10 = (node10==NULL)?std::numeric_limits<double>::infinity():node10->total_cost;
+    double w01 = (node01==NULL)?std::numeric_limits<double>::infinity():node01->total_cost;
+    double w11 = (node11==NULL)?std::numeric_limits<double>::infinity():node11->total_cost;
 
     return w00 + (w10 - w00)*a + (w01 - w00)*b + (w11 + w00 - w10 - w01)*a*b;
 }
@@ -614,7 +611,7 @@ void DyMuPathPlanner::propagateRisk(localNode* nodeTarget)
 }
 
 
-localNode * DyMuPathPlanner::computeLocalPropagation(base::Waypoint wayp_start, base::Waypoint wOvertake, bool keepOldWaypoints)
+localNode * DyMuPathPlanner::computeLocalPropagation(base::Waypoint wayp_start, base::Waypoint wOvertake)
 {
   //wayp_start is the waypoint from which the path is repaired
 
@@ -630,8 +627,8 @@ localNode * DyMuPathPlanner::computeLocalPropagation(base::Waypoint wayp_start, 
         for (uint i = 0; i < local_propagated_nodes.size(); i++)
         {
             local_propagated_nodes[i]->state = OPEN;
-            local_propagated_nodes[i]->deviation = INF;
-            local_propagated_nodes[i]->total_cost = INF;
+            local_propagated_nodes[i]->deviation = std::numeric_limits<double>::infinity();
+            local_propagated_nodes[i]->total_cost = std::numeric_limits<double>::infinity();
         }
         local_propagated_nodes.clear();
     }
@@ -661,7 +658,7 @@ localNode * DyMuPathPlanner::computeLocalPropagation(base::Waypoint wayp_start, 
 
     localNode * nodeTarget;
     localNode * nodeEnd = NULL;
-    if (keepOldWaypoints)
+    if (repairing_approach == CONSERVATIVE)
     {
         nodeEnd = getLocalNode(wOvertake);
         if(nodeEnd->isObstacle)
@@ -687,7 +684,7 @@ localNode * DyMuPathPlanner::computeLocalPropagation(base::Waypoint wayp_start, 
     {
         try
         {
-            if (keepOldWaypoints)
+            if (repairing_approach == CONSERVATIVE)
                 nodeTarget = minCostLocalNode(nodeEnd);
             else
                 nodeTarget = minCostLocalNode(Tovertake, minC);
@@ -702,46 +699,18 @@ localNode * DyMuPathPlanner::computeLocalPropagation(base::Waypoint wayp_start, 
         {
             if (nodeTarget->nb4List[i] != NULL)
             {
-                try
-                {
-                    gNode = getNearestGlobalNode(nodeTarget->nb4List[i]->parent_pose);
-                }
-                catch(int n)
-                {
-                    std::cout << "PLANNING_ERROR: getNearestGlobalNode of neighbour failed" << std::endl;
-                }
-                try
-                {
-                    if (getNearestGlobalNode(nodeTarget->parent_pose) != gNode)
-                        subdivideGlobalNode(gNode);
-                }
-                catch(int n)
-                {
-                    std::cout << "PLANNING_ERROR: subdivideGlobalNode failed" << std::endl;
-                }
+                gNode = getNearestGlobalNode(nodeTarget->nb4List[i]->parent_pose);
+                if (getNearestGlobalNode(nodeTarget->parent_pose) != gNode)
+                    subdivideGlobalNode(gNode);
             }
             if ((nodeTarget->nb4List[i] != NULL) &&
                 (nodeTarget->nb4List[i]->state == OPEN)
                 &&(!nodeTarget->nb4List[i]->isObstacle))
             {
-                try
-                {
-                    propagateLocalNode(nodeTarget->nb4List[i]);
-                }
-                catch(int n)
-                {
-                    std::cout << "PLANNING_ERROR: propagateLocalNode failed" << std::endl;
-                }
-                try
-                {
-                    if (nodeEnd == NULL)
+                propagateLocalNode(nodeTarget->nb4List[i]);
+                if (nodeEnd == NULL)
                         if ((nodeTarget->nb4List[i]->total_cost < Tovertake)&&(nodeTarget->nb4List[i]->risk == 0))
                             nodeEnd = nodeTarget->nb4List[i];
-                }
-                catch(int n)
-                {
-                    std::cout << "PLANNING_ERROR: nodeEnd assignment failed" << std::endl;
-                }
             }
         }
         if ((nodeEnd != NULL)&&(nodeEnd->state == CLOSED)&&
@@ -786,26 +755,26 @@ void DyMuPathPlanner::propagateLocalNode(localNode* nodeTarget)
   //Cost Function
     R = nodeTarget->risk;
 
-    if (nodeTarget->total_cost == INF)
+    if (nodeTarget->total_cost == std::numeric_limits<double>::infinity())
         nodeTarget->total_cost = getTotalCost(nodeTarget);
 
     C = local_res*(risk_ratio*R + 1);
 
-    if(C <= 0) //TODO: make this function return a false bool
+    if (C <= 0) //TODO: make this function return a false bool
         LOG_ERROR_S << "C is not positive";
 
-    if(C > INF)
-        LOG_ERROR_S << "C is higher than INF";
+    if (C > std::numeric_limits<double>::infinity())
+        LOG_ERROR_S << "C is higher than std::numeric_limits<double>::infinity()";
 
   // Eikonal Equation
-    if ((fabs(Tx-Ty)<C)&&(Tx < INF)&&(Ty < INF))
+    if ((fabs(Tx-Ty)<C)&&(Tx < std::numeric_limits<double>::infinity())&&(Ty < std::numeric_limits<double>::infinity()))
         T = (Tx+Ty+sqrt(2*pow(C,2.0) - pow((Tx-Ty),2.0)))/2;
     else
         T = fmin(Tx,Ty) + C;
 
     if(T < nodeTarget->deviation)
     {
-        if (nodeTarget->deviation == INF) //It is not in narrowband
+        if (nodeTarget->deviation == std::numeric_limits<double>::infinity()) //It is not in narrowband
         {
             local_narrowband.push_back(nodeTarget);
             local_propagated_nodes.push_back(nodeTarget);
@@ -871,14 +840,14 @@ std::vector<base::Waypoint> DyMuPathPlanner::getLocalPath(localNode * lSetNode,
                                                        double tau)
 {
     base::Waypoint wPos;
-    bool newWaypoint;
+    bool is_valid_waypoint;
     wPos.position[0] = lSetNode->global_pose.position[0];
     wPos.position[1] = lSetNode->global_pose.position[1];
     wPos.heading = lSetNode->global_pose.orientation;
 
     tau = 0.5*local_res;
     std::vector<base::Waypoint> trajectory;
-    newWaypoint = computeLocalWaypointGDM(wPos, tau*local_res);
+    is_valid_waypoint = computeLocalWaypointGDM(wPos, tau*local_res);
     trajectory.insert(trajectory.begin(),wPos);
     LOG_DEBUG_S << "repairing trajectory initialized";
     LOG_DEBUG_S << "lSetNode at " << wPos.position[0] << ", " << wPos.position[1];
@@ -887,27 +856,19 @@ std::vector<base::Waypoint> DyMuPathPlanner::getLocalPath(localNode * lSetNode,
     while(sqrt(pow((trajectory.front().position[0] - wayp_start.position[0]),2) +
              pow((trajectory.front().position[1] - wayp_start.position[1]),2)) > 1.5*local_res)
     {
-        newWaypoint = computeLocalWaypointGDM(wPos, tau);
-        if (newWaypoint)
+        is_valid_waypoint = computeLocalWaypointGDM(wPos, tau);
+        if(sqrt(pow((wPos.position[0] - trajectory[0].position[0]),2) +
+             pow((wPos.position[1] - trajectory[1].position[1]),2)) < 0.01*tau*local_res)
+            is_valid_waypoint = false;
+        if (is_valid_waypoint)
             trajectory.insert(trajectory.begin(),wPos);
         else
         {
-            LOG_WARN_S << "local trajectory is degenerated due to obstacles";
+            LOG_WARN_S << "WARNING: degenerated gradient";
             localNode * lNode = getLocalNode(trajectory[0]);
-            while(lNode->deviation == INF)
-            {
-                trajectory.erase(trajectory.begin());
-                lNode = getLocalNode(trajectory[0]);
-            }
             wPos = computeLocalWaypointDijkstra(lNode);
             trajectory.insert(trajectory.begin(),wPos);
         }
-         //   return trajectory;
-        /*if (trajectory.size() > 999)//TODO: quit this
-        {
-            LOG_ERROR_S << "computing local trajectory";
-            return trajectory;
-        }*/
     }
 
     LOG_DEBUG_S << "trajectory front at " << trajectory.front().position[0] << ", " << trajectory.front().position[1];
@@ -917,7 +878,7 @@ std::vector<base::Waypoint> DyMuPathPlanner::getLocalPath(localNode * lSetNode,
 
 base::Waypoint DyMuPathPlanner::computeLocalWaypointDijkstra(localNode * lNode)
 {
-    double newX, newY, t = INF;
+    double newX, newY, t = std::numeric_limits<double>::infinity();
     base::Waypoint wPos;
 
     for (uint i = 1; i<4; i++)
@@ -954,8 +915,8 @@ bool DyMuPathPlanner::computeLocalWaypointGDM(base::Waypoint& wPos, double tau)
     localNode * node01;
     localNode * node11;
 
-    double globalXpos = (wPos.position[0]-global_offset.position[0]);
-    double globalYpos = (wPos.position[1]-global_offset.position[1]);
+    double globalXpos = (wPos.position[0]-global_offset[0]);
+    double globalYpos = (wPos.position[1]-global_offset[1]);
     uint globalCornerX = (uint)(globalXpos/global_res);
     uint globalCornerY = (uint)(globalYpos/global_res);
     double globalDistX = globalXpos - (double)(globalCornerX);
@@ -1021,13 +982,13 @@ bool DyMuPathPlanner::computeLocalWaypointGDM(base::Waypoint& wPos, double tau)
 
     if ((std::isnan(dCostX))||(std::isnan(dCostY)))
     {
-        LOG_WARN_S << "local waypoint (" << wPos.position[0] << "," << wPos.position[1] << ") is degenerate (nan gradient)";
+        std::cout << "local waypoint (" << wPos.position[0] << "," << wPos.position[1] << ") is degenerate (nan gradient)" <<std::endl;
         return false;
     }
 
-    if (sqrt(pow(dCostX,2) + pow(dCostY,2)) < 0.001)
+    if (sqrt(pow(dCostX,2) + pow(dCostY,2)) < 0.001*tau*local_res)
     {
-        LOG_WARN_S << "local waypoint (" << wPos.position[0] << "," << wPos.position[1] << ") is degenerate (near 0 gradient)";
+        std::cout << "local waypoint (" << wPos.position[0] << "," << wPos.position[1] << ") is degenerate (near 0 gradient)" << std::endl;
         return false;
     }
 
@@ -1045,15 +1006,15 @@ void DyMuPathPlanner::gradientNode(localNode* nodeTarget, double& dnx, double& d
 
       if (((nodeTarget->nb4List[1] == NULL)&&(nodeTarget->nb4List[2] == NULL))||
           ((nodeTarget->nb4List[1] != NULL)&&(nodeTarget->nb4List[2] != NULL)&&
-           (nodeTarget->nb4List[1]->deviation == INF)&&(nodeTarget->nb4List[2]->deviation == INF)))
+           (nodeTarget->nb4List[1]->deviation == std::numeric_limits<double>::infinity())&&(nodeTarget->nb4List[2]->deviation == std::numeric_limits<double>::infinity())))
           dx = 0;
       else
       {
-          if ((nodeTarget->nb4List[1] == NULL)||(nodeTarget->nb4List[1]->deviation == INF))
+          if ((nodeTarget->nb4List[1] == NULL)||(nodeTarget->nb4List[1]->deviation == std::numeric_limits<double>::infinity()))
               dx = nodeTarget->nb4List[2]->deviation - nodeTarget->deviation;
           else
           {
-              if ((nodeTarget->nb4List[2] == NULL)||(nodeTarget->nb4List[2]->deviation == INF))
+              if ((nodeTarget->nb4List[2] == NULL)||(nodeTarget->nb4List[2]->deviation == std::numeric_limits<double>::infinity()))
                   dx = nodeTarget->deviation - nodeTarget->nb4List[1]->deviation;
               else
                   dx = (nodeTarget->nb4List[2]->deviation -
@@ -1062,15 +1023,15 @@ void DyMuPathPlanner::gradientNode(localNode* nodeTarget, double& dnx, double& d
       }
       if (((nodeTarget->nb4List[0] == NULL)&&(nodeTarget->nb4List[3] == NULL))||
           ((nodeTarget->nb4List[0] != NULL)&&(nodeTarget->nb4List[3] != NULL)&&
-           (nodeTarget->nb4List[0]->deviation == INF)&&(nodeTarget->nb4List[3]->deviation == INF)))
+           (nodeTarget->nb4List[0]->deviation == std::numeric_limits<double>::infinity())&&(nodeTarget->nb4List[3]->deviation == std::numeric_limits<double>::infinity())))
           dy = 0;
       else
       {
-          if ((nodeTarget->nb4List[0] == NULL)||(nodeTarget->nb4List[0]->deviation == INF))
+          if ((nodeTarget->nb4List[0] == NULL)||(nodeTarget->nb4List[0]->deviation == std::numeric_limits<double>::infinity()))
               dy = nodeTarget->nb4List[3]->deviation - nodeTarget->deviation;
           else
           {
-              if ((nodeTarget->nb4List[3] == NULL)||(nodeTarget->nb4List[3]->deviation == INF))
+              if ((nodeTarget->nb4List[3] == NULL)||(nodeTarget->nb4List[3]->deviation == std::numeric_limits<double>::infinity()))
                   dy = nodeTarget->deviation - nodeTarget->nb4List[0]->deviation;
               else
                   dy = (nodeTarget->nb4List[3]->deviation -
@@ -1084,18 +1045,18 @@ void DyMuPathPlanner::gradientNode(localNode* nodeTarget, double& dnx, double& d
 
 /*************EVALUATE IF NEW PATH PASSES THROUGH UNDESIRED AREAS**************/
 //
-bool DyMuPathPlanner::evaluatePath(std::vector<base::Waypoint>& trajectory, bool keepOldWaypoints)
+bool DyMuPathPlanner::evaluatePath( uint starting_index )
 {
 
-    LOG_DEBUG_S << "Path is evaluated again";
+    std::cout << "Path Evaluation Started" << std::endl;
 
-    uint minIndex = 0, maxIndex = 0, rectifiedIndex = 0;
+    uint minIndex = 0, rectifiedIndex = 0;
     bool isBlocked = false;
     localNode* closest_local_node;
     globalNode* closest_goal_node;
     std::vector<base::Waypoint> final_path;
     final_path.clear();
-    uint index_waypoint = 0;
+    uint index_waypoint = starting_index;
     reconnecting_index = 0;
     /*TODO:
      - Convert this into a while loop, in which an iterator is going through the path
@@ -1136,7 +1097,7 @@ bool DyMuPathPlanner::evaluatePath(std::vector<base::Waypoint>& trajectory, bool
                 }
                 std::cout << " LOOP: rectifiedIndex is " << rectifiedIndex << std::endl;
                 final_path.insert(final_path.end(), current_path.begin(),current_path.begin()+rectifiedIndex);
-                index_waypoint = repairPath(current_path[rectifiedIndex], index_waypoint, keepOldWaypoints);
+                index_waypoint = repairPath(current_path[rectifiedIndex], index_waypoint);
                 std::cout << " LOOP: resulting index waypoint is " << index_waypoint << std::endl;
                 std::cout << " LOOP: current path size is " << current_path.size() << std::endl;
                 isBlocked = false;
@@ -1159,7 +1120,7 @@ bool DyMuPathPlanner::evaluatePath(std::vector<base::Waypoint>& trajectory, bool
                 rectifiedIndex--;
             }
             final_path.insert(final_path.end(), current_path.begin(),current_path.begin()+rectifiedIndex);
-            index_waypoint = repairPath(current_path[rectifiedIndex], index_waypoint, keepOldWaypoints);
+            index_waypoint = repairPath(current_path[rectifiedIndex], index_waypoint);
             std::cout << " LOOP: resulting index waypoint is " << index_waypoint << std::endl;
             std::cout << " LOOP: current path size is " << current_path.size() << std::endl;
             isBlocked = false;
@@ -1185,8 +1146,7 @@ bool DyMuPathPlanner::evaluatePath(std::vector<base::Waypoint>& trajectory, bool
         std::cout << " FINAL: path size is " << current_path.size() << std::endl;
         final_path.insert(final_path.end(), current_path.begin()+minIndex,current_path.end());
     }
-    trajectory.clear();
-    trajectory = final_path;
+    current_path = final_path;
     return true;
 }
 
@@ -1274,7 +1234,7 @@ std::vector< std::vector<double> > DyMuPathPlanner::getDeviationMatrix(base::Way
                 for (uint l = 0; l<res_ratio; l++)
                     for(uint k = 0; k<res_ratio; k++)
                     {
-                        if (node_target->localMap[l][k]->deviation == INF)
+                        if (node_target->localMap[l][k]->deviation == std::numeric_limits<double>::infinity())
                             dev_matrix[l+j*res_ratio][k+i*res_ratio] = -1;
                         else
                             dev_matrix[l+j*res_ratio][k+i*res_ratio] =

@@ -17,26 +17,25 @@
 #include <base/samples/RigidBodyState.hpp>
 #include <base/samples/Frame.hpp>
 #include <base/Waypoint.hpp>
-#include <base/Trajectory.hpp>
 #include <vector>
-#include <fstream>
 
 #include <base-logging/Logging.hpp>
 
-#define INF 100000000 //Change this value to maximum available for float type
+//#define INF 100000000 //Change this value to maximum available for float type
 
 namespace PathPlanning_lib
 {
+    //double INF = std::numeric_limits<double>::infinity();
     enum node_state
     {
         OPEN,
         CLOSED
     };
 
-    struct terrainType
+    enum repairingAproach
     {
-        double cost;
-        std::string optimalLM;
+        CONSERVATIVE, // Hazard Avoidance - FM*
+        SWEEPING // multiBiFM*
     };
 
     struct localNode
@@ -58,8 +57,8 @@ namespace PathPlanning_lib
             pose.position[1] = (double)y_;
             parent_pose = _parent_pose;
             state = OPEN;
-            deviation = INF;
-            total_cost = INF;
+            deviation = std::numeric_limits<double>::infinity();
+            total_cost = std::numeric_limits<double>::infinity();
             isObstacle = false;
             risk = 0.0;
         }
@@ -84,12 +83,12 @@ namespace PathPlanning_lib
         std::vector<globalNode*> nb4List;
         std::vector<globalNode*> nb8List;
         std::string nodeLocMode;
-        globalNode(uint x_, uint y_, double res, base::Pose2D offset)
+        globalNode(uint x_, uint y_, double res, std::vector<double>  offset)
         {
             pose.position[0] = (double)x_;
             pose.position[1] = (double)y_;
-            world_pose.position[0] = (double)x_*res + offset.position[0];
-            world_pose.position[1] = (double)y_*res + offset.position[1];
+            world_pose.position[0] = (double)x_*res + offset[0];
+            world_pose.position[1] = (double)y_*res + offset[1];
             //terrain = (unsigned int) t_;
             //elevation = e_;
 
@@ -98,7 +97,7 @@ namespace PathPlanning_lib
             hasLocalMap = false;
             raw_cost = 0.0;
             cost = 0.0;
-            total_cost = INF;
+            total_cost = std::numeric_limits<double>::infinity();
             state = OPEN;
             nodeLocMode = "DONT_CARE";
             hazard_density = 0.0;
@@ -118,7 +117,7 @@ namespace PathPlanning_lib
           // Global Resolution (same for X and Y axii)
             double global_res;
           // Offset of Global Node (0,0) with respect to world frame
-            base::Pose2D global_offset;
+            std::vector<double> global_offset;
           // Local Resolution (same for X and Y axii)
             double local_res;
           // Local Nodes contained within a Global Node edge
@@ -136,6 +135,8 @@ namespace PathPlanning_lib
             std::vector<double> slope_range;
           // Vector of available locomotion modes
             std::vector<std::string> locomotion_modes;
+          // Approach chosen to do the repairings
+            repairingAproach repairing_approach;
 
         public:
           // -- PARAMETERS --
@@ -169,13 +170,14 @@ namespace PathPlanning_lib
           // Class Constructor
             DyMuPathPlanner(double risk_distance,
                             double reconnect_distance,
-                            double risk_ratio);
+                            double risk_ratio,
+                            repairingAproach input_approach);
           // Class Destructor
             ~DyMuPathPlanner();
           // Initialization of Global Layer using Elevation and Terrain Maps
             bool initGlobalLayer(double globalres,  double localres,
                                  uint num_nodes_X, uint num_nodes_Y,
-                                 base::Pose2D offset);
+                                 std::vector<double> offset);
 
             bool setCostMap(std::vector< std::vector<double> > cost_map);
 
@@ -183,15 +185,13 @@ namespace PathPlanning_lib
                             std::vector<double> slope_values,
                             std::vector<std::string> locomotionModes,
                             std::vector< std::vector<double> > elevation,
-                                std::vector< std::vector<double> > terrainMap,
-                                bool to_be_smoothed);
+                                std::vector< std::vector<double> > terrainMap);
 
           // Slope is calculated for nodeTarget
             void calculateSlope(globalNode* nodeTarget);
 
-            void calculateNominalCost(globalNode* nodeTarget,
-                                      int range, int numLocs,
-                                      bool to_be_smoothed);
+            void calculateNominalCost(globalNode* nodeTarget, int range,
+                                      int numLocs);
 
             void smoothCost(globalNode* nodeTarget);
 
@@ -213,9 +213,9 @@ namespace PathPlanning_lib
             globalNode* getNearestGlobalNode(base::Pose2D pos);
             globalNode* getNearestGlobalNode(base::Waypoint wPos);
 
-            std::vector<base::Waypoint> getNewPath(base::Waypoint wPos);
+            std::vector<base::Waypoint> getPath(base::Waypoint wPos);
 
-            std::vector<base::Waypoint> getGlobalPath(base::Waypoint wPos);
+            bool computeGlobalPath(base::Waypoint wPos);
 
             base::Waypoint computeNextGlobalWaypoint(base::Waypoint& wPos,
                                                        double tau);
@@ -247,7 +247,7 @@ namespace PathPlanning_lib
                                   base::samples::frame::Frame traversabilityMap,
                                   double res,
                                   std::vector<base::Waypoint>& trajectory,
-                                  bool keepOldWaypoints, base::Time &localTime);
+                                  base::Time &localTime);
 
             void expandRisk();
 
@@ -259,7 +259,7 @@ namespace PathPlanning_lib
 
             double getTotalCost(localNode* lNode);
 
-            localNode * computeLocalPropagation(base::Waypoint wInit, base::Waypoint wOvertake, bool keepOldWaypoints);
+            localNode * computeLocalPropagation(base::Waypoint wInit, base::Waypoint wOvertake);
 
             void propagateLocalNode(localNode* nodeTarget);
 
@@ -284,12 +284,14 @@ namespace PathPlanning_lib
 
 
 
-            bool evaluatePath(std::vector<base::Waypoint>& trajectory, bool keepOldWaypoints);
+            bool evaluatePath(uint starting_index);
 
             bool isBlockingObstacle(localNode* obNode, uint& maxIndex, uint& minIndex, std::vector<base::Waypoint> trajectory);
 
             //void repairPath(std::vector<base::Waypoint>& trajectory, uint minIndex, uint maxIndex);
-            int repairPath(base::Waypoint wInit, uint index, bool keepOldWaypoints);
+            int repairPath(base::Waypoint wInit, uint index);
+
+            //TODO: Make function to change repairing approach anytime
 
             std::vector< std::vector<double> > getRiskMatrix(base::Waypoint rover_pos);
             std::vector< std::vector<double> > getDeviationMatrix(base::Waypoint rover_pos);
