@@ -286,7 +286,7 @@ namespace PathPlanning_lib
 
             bool evaluatePath(uint starting_index);
 
-            bool isBlockingObstacle(localNode* obNode, uint& maxIndex, uint& minIndex, std::vector<base::Waypoint> trajectory);
+            bool isBlockingObstacle(localNode* obNode, uint& maxIndex, uint& minIndex);
 
             //void repairPath(std::vector<base::Waypoint>& trajectory, uint minIndex, uint maxIndex);
             int repairPath(base::Waypoint wInit, uint index);
