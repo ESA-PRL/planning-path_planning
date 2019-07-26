@@ -367,8 +367,7 @@ int DyMuPathPlanner::repairPath(base::Waypoint wayp_start, uint index)
       //Local Planning is aborted because of having entered obstacle area
         if (lSet == NULL)
         {
-            std::cout << "repairing aborted" << std::endl;
-            LOG_DEBUG_S << "index = " << index;
+            LOG_WARN_S << "Repairing aborted, the robot is in obstacle area";
             std::cout << "global stops at (" << current_path[index].position[0]
                   << "," << current_path[index].position[1] << ")" << std::endl;
             current_path.clear();
@@ -879,7 +878,7 @@ base::Waypoint DyMuPathPlanner::computeLocalWaypointDijkstra(localNode * lNode)
     double newX, newY, t = std::numeric_limits<double>::infinity();
     base::Waypoint wPos;
 
-    for (uint i = 1; i<4; i++)
+    for (uint i = 0; i<4; i++)
         if((lNode->nb4List[i] != NULL)&&(lNode->nb4List[i]->deviation < t))
         {
             t = lNode->nb4List[i]->deviation;
@@ -1045,8 +1044,6 @@ void DyMuPathPlanner::gradientNode(localNode* nodeTarget, double& dnx, double& d
 //
 bool DyMuPathPlanner::evaluatePath( uint starting_index )
 {
-
-    std::cout << "Path Evaluation Started" << std::endl;
 
     uint minIndex = 0, rectifiedIndex = 0;
     bool isBlocked = false;
