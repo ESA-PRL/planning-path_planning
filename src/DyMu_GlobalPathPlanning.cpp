@@ -875,3 +875,97 @@ double DyMuPathPlanner::getTotalCost(base::Waypoint wInt)
                (w11 + w00 - w10 - w01)*a*b;
     }
 }
+
+
+
+bool DyMuPathPlanner::initCoRaMethod(int numTerrains_, int numCriteria_, std::vector<double> weights_)
+{
+	numTerrains = numTerrains_;
+	numCriteria = numCriteria_;
+	if(weights_.size() == numCriteria)
+	{
+		weights.resize(numCriteria);
+		weights = weights_;
+		terrainVector.resize(numTerrains);
+		for(int i = 0; i < numTerrains; i++)
+		{
+			terrainVector[i].criteriaInfo.resize(numCriteria);
+			terrainVector[i].traverseInfo.resize(numCriteria);
+			terrainVector[i].traverseData.resize(numCriteria);
+		}
+		return 0;
+	}
+	else return -1;
+}
+
+bool DyMuPathPlanner::fillTerrainInfo(int terrainId, std::vector<double> data)
+{
+	if(data.size() == numCriteria)
+	{
+		for(int i = 0; i < numCriteria; i++) 
+			terrainVector[terrainId].traverseData[i].push_back(data[i]);
+
+		return true;
+	}
+	else return false;
+}
+			
+std::vector<double> DyMuPathPlanner::updateCost()
+{
+	std::vector<double> costData;
+	costData.push_back(1);
+
+	//TODO First of all, call the function analysis to update the data inside the criterias
+
+	std::vector<double> costRatios = computeCostRatio();
+
+	int n = costRatios.size();
+	for(int i = 0; i < n; i++)
+		costData.push_back(costData[i]/costRatios[i]);
+	
+	double minCost = costData[0];
+	for(int i = 1; i < n; i++) if(minCost > costData[i]) minCost = costData[i];
+	
+	int counter = 0;
+	for(int i = 0; i < numTerrains; i++)
+	{
+		if(terrainVector[i].bTraversed)
+		{
+			costData[i] = costData[i]/minCost;
+			counter++;
+		} 
+	}
+	return costData;
+}
+
+std::vector<double> DyMuPathPlanner::computeCostRatio()
+{
+	std::vector<double> costRatios;
+	double accWeight = std::accumulate(weights.begin(), weights.end(), 0.0);
+	for(int i = 0; i < numTerrains - 1; i++) 
+	{
+		if(terrainVector[i].bTraversed)
+		{
+			int next = 1;
+			bool cond = false;
+			while(!cond)
+			{
+				if(!terrainVector[i+next].bTraversed) next += 1;
+				else cond = true;
+				if(!(i + next < numTerrains)) cond = true;
+			}
+			if(i + next < numTerrains)
+			{
+				double sum = 0;
+				for(int j = 0; j < numCriteria; j++)
+					sum += weights[j]*terrainVector[i].criteriaInfo[j].mean/
+									  terrainVector[i+next].criteriaInfo[j].mean;
+				
+				costRatios.push_back(sum/accWeight);	
+				
+			}
+		}			
+	}
+	return costRatios;
+}
+

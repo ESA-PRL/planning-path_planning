@@ -107,105 +107,127 @@ namespace PathPlanning_lib
 
     struct costCriteria
     {
-	int numSamples;
-	double mean;
-	double stdDeviation;
-	bool bEmpty;
-	costCriteria(int numSamples_, double mean_, double stdDeviation_)
-	{
-		numSamples = numSamples_;
-		mean = mean_;
-		stdDeviation = stdDeviation_;
-		bEmpty = false;
-	}
-	costCriteria()
-	{
-		numSamples = 0;
-		mean = 0;
-		stdDeviation = 0;
-		bEmpty = true;
-	}
-	void addSamples(std::vector<double> newSamples)
-	{
-		int n = newSamples.size();
-		if(n != 0) 	
+		int numSamples;
+		double mean;
+		double stdDeviation;
+		bool bEmpty;
+		costCriteria(int numSamples_, double mean_, double stdDeviation_)
 		{
-			double sum = 0;
-			for(int i = 0; i < n; i++)
+			numSamples = numSamples_;
+			mean = mean_;
+			stdDeviation = stdDeviation_;
+			bEmpty = false;
+		}
+		costCriteria()
+		{
+			numSamples = 0;
+			mean = 0;
+			stdDeviation = 0;
+			bEmpty = true;
+		}
+		void addData(std::vector<double> newSamples)
+		{
+			int n = newSamples.size();
+			if(n != 0) 	
 			{
-				sum += newSamples[i];
+				double sum = 0;
+				for(int i = 0; i < n; i++)
+				{
+					sum += newSamples[i];
+				}
+				double newMean = (mean*numSamples + sum)/(numSamples + n);
+
+				double accDiff = 0;
+				for(int i = 0; i < n; i++)
+				{
+					if(!bEmpty) 	
+						accDiff += (newSamples[i] - mean)*(newSamples[i] - newMean);
+					else 		
+						accDiff += pow(newSamples[i] - newMean,2);
+				}
+				stdDeviation = sqrt((pow(stdDeviation,2)*numSamples + accDiff)/(numSamples + n));
+
+				numSamples += n;
+				mean = newMean;		
+				bEmpty = false;
 			}
-			double newMean = (mean*numSamples + sum)/(numSamples + n);
+		}
+		void addData(int numSamples_, double mean_, double stdDeviation_)
+		{
+			if(numSamples_ != 0) 	
+			{
+				double newMean = (mean*numSamples + mean_*numSamples_)/(numSamples + numSamples_);
+
+				stdDeviation = sqrt((pow(stdDeviation,2)*numSamples + 
+				pow(stdDeviation_,2)*numSamples_)/(numSamples + numSamples_));
+
+				numSamples += numSamples_;
+				mean = newMean;		
+				bEmpty = false;
+			}
+		}
+		void addData(double newSample)
+		{
+			double newMean = (mean*numSamples + newSample)/(numSamples + 1);
 
 			double accDiff = 0;
-			for(int i = 0; i < n; i++)
-			{
-				if(!bEmpty) 	accDiff += (newSamples[i] - mean)*(newSamples[i] - newMean);
-				else 		accDiff += pow(newSamples[i] - newMean,2);
-			}
-			stdDeviation = sqrt((pow(stdDeviation,2)*numSamples + accDiff)/(numSamples + n));
+			if(!bEmpty) 	accDiff += (newSample - mean)*(newSample - newMean);
+			stdDeviation = sqrt((pow(stdDeviation,2)*numSamples + accDiff)/(numSamples + 1));
 
-			numSamples += n;
+			numSamples += 1;
 			mean = newMean;		
 			bEmpty = false;
 		}
-	}
-	void addSamples(double newSample)
-	{
-		double newMean = (mean*numSamples + newSample)/(numSamples + 1);
+		void erase()
+		{
+			numSamples = 0;
+			mean = 0;
+			stdDeviation = 0;
+			bEmpty = true;
+		}	
+	};
 
-		double accDiff = 0;
-		if(!bEmpty) 	accDiff += (newSample - mean)*(newSample - newMean);
-		stdDeviation = sqrt((pow(stdDeviation,2)*numSamples + accDiff)/(numSamples + 1));
-
-		numSamples += 1;
-		mean = newMean;		
-		bEmpty = false;
-	}
-	void erase()
+	struct segmentedTerrain
 	{
-		numSamples = 0;
-		mean = 0;
-		stdDeviation = 0;
-		bEmpty = true;
-	}	
-    };
-
-    struct segmentedTerrain
-    {
-	int id;
-	double cost;
-	double slopeRatio; 		 // Ratio of increasing cost per degree (u/°)
-	costCriteria obstaclesDensity;
-	costCriteria uObstaclesDensity;
-	costCriteria timeDelay;
-	costCriteria uTimeDelay;
-	costCriteria powerEffort;
-	costCriteria uPowerEffort;
-	bool bInit;
-	bool bTraversed;
-	segmentedTerrain()
-	{
-		bInit = false;
-		bTraversed = false;
-	}
-	segmentedTerrain(int id_, double cost_, double slopeRatio_)
-	{
-		id = id_;
-		cost = cost_;
-		slopeRatio = slopeRatio_;		
-		bInit = true;
-		bTraversed = false;
-	}
-	segmentedTerrain(int id_, costCriteria obstaclesDensity_, costCriteria timeDelay_, costCriteria powerEffort_)
-	{
-		id = id_;
-		obstaclesDensity = obstaclesDensity_;
-		timeDelay = timeDelay_;
-		powerEffort = powerEffort_;
-		bInit = false;
-		bTraversed = true;
-	}	
+		double cost;
+		double slopeRatio; 			 // Ratio of increasing cost per degree (u/°)
+		std::vector<costCriteria> criteriaInfo, traverseInfo;
+		std::vector<std::vector<double>> traverseData;
+		bool bTraversed;
+		segmentedTerrain()
+		{
+			cost = 1;
+			slopeRatio = 1;
+			bTraversed = false;
+		}
+		segmentedTerrain(double cost_, double slopeRatio_)
+		{
+			cost = cost_;
+			slopeRatio = slopeRatio_;		
+			bTraversed = false;
+		}
+		segmentedTerrain(std::vector<costCriteria> criteriaInfo_)
+		{
+			criteriaInfo.resize(criteriaInfo_.size());
+			traverseInfo.resize(criteriaInfo_.size());
+			criteriaInfo = criteriaInfo_;
+			bTraversed = true;
+		}
+		void updateCriteria()
+		{
+			if(bTraversed)
+			{
+				int n = criteriaInfo.size();
+				for(int i = 0; i < n; i++)
+				{
+					criteriaInfo[i].addData(traverseInfo[i].numSamples,
+											traverseInfo[i].mean,
+											traverseInfo[i].stdDeviation);
+					traverseInfo[i].erase();
+				} 
+			}
+		}
+		//void dataAnalysis()	//TODO Function to analyse the data obtained and decide how to use it		
     };
 
 //__DYMU_PATH_PLANNER_CLASS__
@@ -241,6 +263,15 @@ namespace PathPlanning_lib
           // Approach chosen to do the repairings
             repairingAproach repairing_approach;
 
+		  // Cost ratio updating
+		  // Vector of terrain segmentation info
+			std::vector<segmentedTerrain> terrainVector;
+		  // Vector of criteria weights
+			std::vector<double> weights;
+		  // Number of segmented terrains
+			int numTerrains;
+		  // Number of parameters used for cost updating
+			int numCriteria;
         public:
           // -- PARAMETERS --
 
@@ -398,6 +429,14 @@ namespace PathPlanning_lib
 
             std::vector< std::vector<double> > getRiskMatrix(base::Waypoint rover_pos);
             std::vector< std::vector<double> > getDeviationMatrix(base::Waypoint rover_pos);
+
+			// COST RATIO UPDATING AFTER TRAVERSE (CoRa)
+	
+			bool initCoRaMethod(int numTerrains_, int numCriteria_, std::vector<double> weights_);
+			bool fillTerrainInfo(int terrainId, std::vector<double> data);
+			
+			std::vector<double> updateCost();
+			std::vector<double> computeCostRatio();
     };
 
 } // end namespace
