@@ -125,6 +125,7 @@ namespace PathPlanning_lib
 			stdDeviation = 0;
 			bEmpty = true;
 		}
+
 		void addData(std::vector<double> newSamples)
 		{
 			int n = newSamples.size();
@@ -145,39 +146,42 @@ namespace PathPlanning_lib
 					else 		
 						accDiff += pow(newSamples[i] - newMean,2);
 				}
-				stdDeviation = sqrt((pow(stdDeviation,2)*numSamples + accDiff)/(numSamples + n));
+				stdDeviation = sqrt((pow(stdDeviation,2)*(numSamples - 1) + accDiff)/(numSamples + n - 2));
 
 				numSamples += n;
 				mean = newMean;		
 				bEmpty = false;
 			}
 		}
+
 		void addData(int numSamples_, double mean_, double stdDeviation_)
 		{
 			if(numSamples_ != 0) 	
 			{
 				double newMean = (mean*numSamples + mean_*numSamples_)/(numSamples + numSamples_);
 
-				stdDeviation = sqrt((pow(stdDeviation,2)*numSamples + 
-				pow(stdDeviation_,2)*numSamples_)/(numSamples + numSamples_));
+				stdDeviation = sqrt((pow(stdDeviation,2)*(numSamples - 1) + 
+				pow(stdDeviation_,2)*(numSamples_ - 1))/(numSamples + numSamples_ - 2));
 
 				numSamples += numSamples_;
 				mean = newMean;		
 				bEmpty = false;
 			}
 		}
+
 		void addData(double newSample)
 		{
 			double newMean = (mean*numSamples + newSample)/(numSamples + 1);
 
 			double accDiff = 0;
 			if(!bEmpty) 	accDiff += (newSample - mean)*(newSample - newMean);
-			stdDeviation = sqrt((pow(stdDeviation,2)*numSamples + accDiff)/(numSamples + 1));
+			stdDeviation = sqrt((pow(stdDeviation,2)*(numSamples - 1) + accDiff)/(numSamples + 1 - 2));
 
 			numSamples += 1;
 			mean = newMean;		
 			bEmpty = false;
 		}
+
 		void erase()
 		{
 			numSamples = 0;
@@ -213,21 +217,107 @@ namespace PathPlanning_lib
 			criteriaInfo = criteriaInfo_;
 			bTraversed = true;
 		}
-		void updateCriteria()
+
+		void updateCriteria(int criteriaIndex)
 		{
-			if(bTraversed)
+			int n = criteriaInfo.size();
+			if(criteriaIndex < n)
 			{
-				int n = criteriaInfo.size();
-				for(int i = 0; i < n; i++)
-				{
-					criteriaInfo[i].addData(traverseInfo[i].numSamples,
-											traverseInfo[i].mean,
-											traverseInfo[i].stdDeviation);
-					traverseInfo[i].erase();
-				} 
-			}
+				criteriaInfo[criteriaIndex].addData(traverseInfo[criteriaIndex].numSamples,
+													traverseInfo[criteriaIndex].mean,
+													traverseInfo[criteriaIndex].stdDeviation);
+			} 
 		}
-		//void dataAnalysis()	//TODO Function to analyse the data obtained and decide how to use it		
+
+		void dataAnalysis()
+		{
+			if(!bTraversed)
+			{
+				bTraversed = true;
+				for(int i = 0; i < criteriaInfo.size(); i++)
+				{
+					traverseInfo[i].addData(traverseData[i]);
+					traverseData[i].erase(traverseData[i].begin(),traverseData[i].end());
+					if(criteriaInfo[i].numSamples < 30)
+					{
+						bTraversed = false;
+						updateCriteria(i);
+						traverseInfo[i].erase();
+					}
+					else
+					{
+						if(FTest(i)) updateCriteria(i);
+						traverseInfo[i].erase();
+					}
+				}	
+			}
+			else
+			{
+				for(int i = 0; i < criteriaInfo.size(); i++)
+				{
+					if(traverseData[i].size() > 10)
+					{
+						traverseInfo[i].addData(traverseData[i]);
+						traverseData[i].erase(traverseData[i].begin(),traverseData[i].end());
+						if(FTest(i)) updateCriteria(i);
+						traverseInfo[i].erase();
+					}
+				}
+			}	
+		}
+
+		bool FTest(int i)
+		{
+			double s1, s2, F;
+			bool result;
+			if(criteriaInfo[i].stdDeviation < traverseInfo[i].stdDeviation)
+			{
+				s1 = traverseInfo[i].stdDeviation;
+				s2 = criteriaInfo[i].stdDeviation;
+			}
+			else
+			{
+				s1 = criteriaInfo[i].stdDeviation;
+				s2 = traverseInfo[i].stdDeviation;
+			}
+			
+			F = pow(s1,2)/pow(s2,2);
+			if(F < 2.05) result = studentTTest(i); 
+			else result = cochranTTest(i);
+			return result;			
+		}
+
+		bool studentTTest(int i)
+		{
+			double n1, n2, s1, s2, x1, x2, sp, t;
+			n1 = criteriaInfo[i].numSamples;
+			n2 = traverseInfo[i].numSamples;
+			s1 = criteriaInfo[i].stdDeviation;
+			s2 = traverseInfo[i].stdDeviation;
+			x1 = criteriaInfo[i].mean;
+			x2 = traverseInfo[i].mean;
+
+			sp = sqrt(((n1-1)*pow(s1,2)+(n2-1)*pow(s2,2))/(n1+n2-2));
+			t = sqrt(n1*n2/(n1+n2))*(x1-x2)/sp;
+			if(t < 1.96) return true;
+			else return false;
+		}
+
+		bool cochranTTest(int i)
+		{
+			double n1, n2, s1, s2, x1, x2, tcal, ttab;
+			n1 = criteriaInfo[i].numSamples;
+			n2 = traverseInfo[i].numSamples;
+			s1 = criteriaInfo[i].stdDeviation;
+			s2 = traverseInfo[i].stdDeviation;
+			x1 = criteriaInfo[i].mean;
+			x2 = traverseInfo[i].mean;
+
+			tcal = (x1-x2)/sqrt(pow(s1,2)/n1+pow(s2,2)/n2);
+			ttab = (1.96*pow(s1,2)/n1 + 2.22*pow(s2,2)/n2)/(pow(s1,2)/n1+pow(s2,2)/n2);
+			if(tcal < ttab) return true;
+			else return false;
+		}
     };
 
 //__DYMU_PATH_PLANNER_CLASS__
@@ -272,6 +362,8 @@ namespace PathPlanning_lib
 			int numTerrains;
 		  // Number of parameters used for cost updating
 			int numCriteria;
+		  // Base speed to obtain costs
+			double baseSpeed;
         public:
           // -- PARAMETERS --
 
@@ -433,6 +525,7 @@ namespace PathPlanning_lib
 			// COST RATIO UPDATING AFTER TRAVERSE (CoRa)
 	
 			bool initCoRaMethod(int numTerrains_, int numCriteria_, std::vector<double> weights_);
+			int getTerrain(base::Waypoint currentPos);
 			bool fillTerrainInfo(int terrainId, std::vector<double> data);
 			
 			std::vector<double> updateCost();

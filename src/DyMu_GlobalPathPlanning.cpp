@@ -882,6 +882,12 @@ bool DyMuPathPlanner::initCoRaMethod(int numTerrains_, int numCriteria_, std::ve
 {
 	numTerrains = numTerrains_;
 	numCriteria = numCriteria_;
+
+	double baseSpeed = cost_lutable[0];
+	for(int i = 1; i < cost_lutable.size(); i++) 
+		if(baseSpeed > cost_lutable[i]) 
+			baseSpeed = cost_lutable[i];
+
 	if(weights_.size() == numCriteria)
 	{
 		weights.resize(numCriteria);
@@ -900,22 +906,36 @@ bool DyMuPathPlanner::initCoRaMethod(int numTerrains_, int numCriteria_, std::ve
 
 bool DyMuPathPlanner::fillTerrainInfo(int terrainId, std::vector<double> data)
 {
+	terrainVector[terrainId].dataAnalysis();
 	if(data.size() == numCriteria)
 	{
-		for(int i = 0; i < numCriteria; i++) 
-			terrainVector[terrainId].traverseData[i].push_back(data[i]);
+		for(int i = 0; i < numCriteria; i++)
+			if(data[i] > 0) 
+				terrainVector[terrainId].traverseData[i].push_back(data[i]);
 
 		return true;
 	}
 	else return false;
 }
-			
+
+int DyMuPathPlanner::getTerrain(base::Waypoint currentPos)
+{
+	int terrainIndex;
+	globalNode * currentNode = getNearestGlobalNode(currentPos);
+	terrainIndex = currentNode->terrain - 1;
+	//if(terrainIndex < 0) terrainIndex = 0; //TODO debug if obstacle
+	return terrainIndex;
+}
+		
 std::vector<double> DyMuPathPlanner::updateCost()
 {
 	std::vector<double> costData;
 	costData.push_back(1);
 
-	//TODO First of all, call the function analysis to update the data inside the criterias
+	int range = slope_range.size();
+	int numLocs = locomotion_modes.size();
+
+	for(int i = 0; i < numTerrains; i++) terrainVector[i].dataAnalysis();
 
 	std::vector<double> costRatios = computeCostRatio();
 
@@ -925,17 +945,18 @@ std::vector<double> DyMuPathPlanner::updateCost()
 	
 	double minCost = costData[0];
 	for(int i = 1; i < n; i++) if(minCost > costData[i]) minCost = costData[i];
-	
+
 	int counter = 0;
 	for(int i = 0; i < numTerrains; i++)
 	{
 		if(terrainVector[i].bTraversed)
 		{
-			costData[i] = costData[i]/minCost;
+			for(int j = 0; j < range; j++)
+				cost_lutable[(i+1)*range*numLocs + j] = baseSpeed*(costData[counter]/minCost + terrainVector[i].slopeRatio*slope_range[j]);
 			counter++;
 		} 
 	}
-	return costData;
+	return cost_lutable;
 }
 
 std::vector<double> DyMuPathPlanner::computeCostRatio()
