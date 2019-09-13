@@ -883,7 +883,7 @@ bool DyMuPathPlanner::initCoRaMethod(int numTerrains_, int numCriteria_, std::ve
 	numTerrains = numTerrains_;
 	numCriteria = numCriteria_;
 
-	double baseSpeed = cost_lutable[0];
+	baseSpeed = cost_lutable[0];
 	for(int i = 1; i < cost_lutable.size(); i++) 
 		if(baseSpeed > cost_lutable[i]) 
 			baseSpeed = cost_lutable[i];
@@ -899,9 +899,9 @@ bool DyMuPathPlanner::initCoRaMethod(int numTerrains_, int numCriteria_, std::ve
 			terrainVector[i].traverseInfo.resize(numCriteria);
 			terrainVector[i].traverseData.resize(numCriteria);
 		}
-		return 0;
+		return true;
 	}
-	else return -1;
+	else return false;
 }
 
 bool DyMuPathPlanner::fillTerrainInfo(int terrainId, std::vector<double> data)
@@ -956,6 +956,8 @@ std::vector<double> DyMuPathPlanner::updateCost()
 			counter++;
 		} 
 	}
+
+	std::cout << "Costs updated, new cost vector: ["<< cost_lutable[range*numLocs] <<", " << cost_lutable[2*range*numLocs]<<", " << cost_lutable[3*range*numLocs]<<"]" <<std::endl;
 	return cost_lutable;
 }
 

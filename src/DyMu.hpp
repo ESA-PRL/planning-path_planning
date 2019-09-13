@@ -138,15 +138,19 @@ namespace PathPlanning_lib
 				}
 				double newMean = (mean*numSamples + sum)/(numSamples + n);
 
-				double accDiff = 0;
-				for(int i = 0; i < n; i++)
+				if(numSamples + n - 2 > 0)
 				{
-					if(!bEmpty) 	
-						accDiff += (newSamples[i] - mean)*(newSamples[i] - newMean);
-					else 		
-						accDiff += pow(newSamples[i] - newMean,2);
+					double accDiff = 0;
+					for(int i = 0; i < n; i++)
+					{
+						if(!bEmpty) 	
+							accDiff += (newSamples[i] - mean)*(newSamples[i] - newMean);
+						else 		
+							accDiff += pow(newSamples[i] - newMean,2);
+					}
+					stdDeviation = sqrt((pow(stdDeviation,2)*(numSamples - 1) + accDiff)/(numSamples + n - 2));
 				}
-				stdDeviation = sqrt((pow(stdDeviation,2)*(numSamples - 1) + accDiff)/(numSamples + n - 2));
+				else std::cout << "ERROR: not enough samples to obtain standard deviation."<<std::endl; 
 
 				numSamples += n;
 				mean = newMean;		
@@ -173,8 +177,8 @@ namespace PathPlanning_lib
 		{
 			double newMean = (mean*numSamples + newSample)/(numSamples + 1);
 
-			double accDiff = 0;
-			if(!bEmpty) 	accDiff += (newSample - mean)*(newSample - newMean);
+			double accDiff;
+			if(!bEmpty)	accDiff = (newSample - mean)*(newSample - newMean);
 			stdDeviation = sqrt((pow(stdDeviation,2)*(numSamples - 1) + accDiff)/(numSamples + 1 - 2));
 
 			numSamples += 1;
@@ -236,20 +240,25 @@ namespace PathPlanning_lib
 				bTraversed = true;
 				for(int i = 0; i < criteriaInfo.size(); i++)
 				{
-					traverseInfo[i].addData(traverseData[i]);
-					traverseData[i].erase(traverseData[i].begin(),traverseData[i].end());
-					if(criteriaInfo[i].numSamples < 30)
+					if(traverseData[i].size() < 10 && criteriaInfo[i].numSamples < 10)
 					{
 						bTraversed = false;
-						updateCriteria(i);
-						traverseInfo[i].erase();
 					}
 					else
 					{
-						if(FTest(i)) updateCriteria(i);
+						traverseInfo[i].addData(traverseData[i]);
+						traverseData[i].erase(traverseData[i].begin(),traverseData[i].end());
+						updateCriteria(i);
 						traverseInfo[i].erase();
 					}
 				}	
+				if(bTraversed) 
+				{
+					std::cout << "Now we have gathered enough info of the current terrain: "<<std::endl;
+					std::cout << "Number of samples: "<<criteriaInfo[0].numSamples<<std::endl;
+					std::cout << "Mean: "<<criteriaInfo[0].mean<<std::endl;
+					std::cout << "Standard deviation: "<<criteriaInfo[0].stdDeviation<<std::endl;
+				}
 			}
 			else
 			{
@@ -260,6 +269,9 @@ namespace PathPlanning_lib
 						traverseInfo[i].addData(traverseData[i]);
 						traverseData[i].erase(traverseData[i].begin(),traverseData[i].end());
 						if(FTest(i)) updateCriteria(i);
+						std::cout << "Number of samples: "<<criteriaInfo[0].numSamples<<std::endl;
+						std::cout << "Mean: "<<criteriaInfo[0].mean<<std::endl;
+						std::cout << "Standard deviation: "<<criteriaInfo[0].stdDeviation<<std::endl;
 						traverseInfo[i].erase();
 					}
 				}
