@@ -397,15 +397,18 @@ bool DyMuPathPlanner::computeTotalCostMap(base::Waypoint wPos)
     globalNode * startNode = getNearestGlobalNode(wPos);
 
   // Check validity of Global Node closest to wPos
-    if (startNode->isObstacle)
+    if (!isSafeNode(startNode))
+    {
+        LOG_ERROR_S << "PLANNER: The rover is located too close to an obstacle";
         return false;
+    }
 
   // In case it is not the first run, all previous computation is resetted
     resetTotalCostMap();
     resetGlobalNarrowBand();
 
     globalNode * nodeTarget = global_goal;
-    while ((!global_narrowband.empty())&&(startNode->state == OPEN))
+    while ((!global_narrowband.empty())&&(!isFullyClosedNode(startNode)))
     {
         nodeTarget = minCostGlobalNode();
         nodeTarget->state = CLOSED;
@@ -417,11 +420,41 @@ bool DyMuPathPlanner::computeTotalCostMap(base::Waypoint wPos)
     }
     if (global_narrowband.empty())
     {
-        LOG_WARN_S << "The goal is unreachable";
+        LOG_ERROR_S << "The goal is unreachable";
         return false;
     }
     else
+    {
         return true;
+    }
+}
+
+bool DyMuPathPlanner::isSafeNode(globalNode* global_node)
+{
+    if (global_node->isObstacle)
+    {
+        return false;
+    }
+    for (uint i = 0; i<8; i++)
+        if (global_node->nb8List[i]->isObstacle)
+        {
+            return false;
+        }
+    return true;
+}
+
+bool DyMuPathPlanner::isFullyClosedNode(globalNode* global_node)
+{
+    if (global_node->state == OPEN)
+    {
+        return false;
+    }
+    for (uint i = 0; i<4; i++)
+        if (global_node->nb4List[i]->state==OPEN)
+        {
+            return false;
+        }
+    return true;
 }
 
 /***********************COMPUTATION OF TOTAL COST******************************/
@@ -588,8 +621,14 @@ globalNode* DyMuPathPlanner::getNearestGlobalNode(base::Waypoint wPos)
 // obstacles, is returned
 std::vector<base::Waypoint> DyMuPathPlanner::getPath(base::Waypoint wPos)
 {
+    LOG_DEBUG_S << "PLANNER: the robot is at (" << wPos.position[0] <<
+                   ", " << wPos.position[1] << ") ";
     computeGlobalPath(wPos);
+    LOG_DEBUG_S << "PLANNER: resulting path size = " << current_path.size() <<
+                   " waypoints, BEFORE evaluation";
     evaluatePath(0);
+    LOG_DEBUG_S << "PLANNER: resulting path size = " << current_path.size() <<
+                   " waypoints, AFTER evaluation";
     return current_path;
 }
 
@@ -608,11 +647,22 @@ bool DyMuPathPlanner::computeGlobalPath(base::Waypoint wPos)
       current_path.clear();
       double tau = std::min(0.4,risk_distance);
       wNext = computeNextGlobalWaypoint(wPos, tau);
+
+      if (std::isnan(wNext.position[0])||std::isnan(wNext.position[1]))
+      {
+          LOG_ERROR_S << "PLANNER: Gradient Descent Method failed at (" <<
+                         wNext.position[0] << ", " << wNext.position[1] << ") ";
+          return false;
+      }
+
       current_path.push_back(wPos);
 
       wPos = wNext;
-      LOG_DEBUG_S << "trajectory initialized with tau = " << tau;
+      LOG_DEBUG_S << "PLANNER: the robot is at (" << wPos.position[0] <<
+                     ", " << wPos.position[1] << ") ";
 
+      LOG_DEBUG_S << "PLANNER: the goal is at (" << sinkPoint.position[0] <<
+                     ", " << sinkPoint.position[1] << ") ";
 
       while(sqrt(pow((wPos.position[0] - sinkPoint.position[0]),2) +
                pow((wPos.position[1] - sinkPoint.position[1]),2)) >

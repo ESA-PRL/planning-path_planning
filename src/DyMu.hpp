@@ -203,6 +203,9 @@ namespace PathPlanning_lib
             bool computeTotalCostMap(base::Waypoint wPos);
             bool computeEntireTotalCostMap();
 
+            bool isSafeNode(globalNode* global_node);
+            bool isFullyClosedNode(globalNode* global_node);
+
             void resetTotalCostMap();
             void resetGlobalNarrowBand();
 
