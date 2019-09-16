@@ -199,7 +199,7 @@ namespace PathPlanning_lib
 	{
 		double cost;
 		double slopeRatio; 			 // Ratio of increasing cost per degree (u/°)
-		std::vector<costCriteria> criteriaInfo, traverseInfo;
+		std::vector<costCriteria> criteriaInfo, traverseInfo, rejectedInfo;
 		std::vector<std::vector<double>> traverseData;
 		bool bTraversed;
 		segmentedTerrain()
@@ -222,60 +222,86 @@ namespace PathPlanning_lib
 			bTraversed = true;
 		}
 
-		void updateCriteria(int criteriaIndex)
-		{
-			int n = criteriaInfo.size();
-			if(criteriaIndex < n)
-			{
-				criteriaInfo[criteriaIndex].addData(traverseInfo[criteriaIndex].numSamples,
-													traverseInfo[criteriaIndex].mean,
-													traverseInfo[criteriaIndex].stdDeviation);
-			} 
-		}
-
 		void dataAnalysis()
 		{
 			if(!bTraversed)
 			{
-				bTraversed = true;
 				for(int i = 0; i < criteriaInfo.size(); i++)
 				{
-					if(traverseData[i].size() < 10 && criteriaInfo[i].numSamples < 10)
-					{
-						bTraversed = false;
-					}
-					else
+					if(traverseData[i].size() > 30)
 					{
 						traverseInfo[i].addData(traverseData[i]);
 						traverseData[i].erase(traverseData[i].begin(),traverseData[i].end());
-						updateCriteria(i);
+						criteriaInfo[i].addData(traverseInfo[i].numSamples,
+										traverseInfo[i].mean,
+										traverseInfo[i].stdDeviation);
+
 						traverseInfo[i].erase();
+						bTraversed = true;
 					}
 				}	
 				if(bTraversed) 
 				{
-					std::cout << "Now we have gathered enough info of the current terrain: "<<std::endl;
-					std::cout << "Number of samples: "<<criteriaInfo[0].numSamples<<std::endl;
-					std::cout << "Mean: "<<criteriaInfo[0].mean<<std::endl;
-					std::cout << "Standard deviation: "<<criteriaInfo[0].stdDeviation<<std::endl;
+					std::cout <<  "\033[1;32mNow we have gathered enough info of the current terrain.\033[0m"<<std::endl;
 				}
 			}
 			else
 			{
 				for(int i = 0; i < criteriaInfo.size(); i++)
 				{
-					if(traverseData[i].size() > 10)
+					if(traverseData[i].size() > 9)
 					{
 						traverseInfo[i].addData(traverseData[i]);
+						if(FTest(i)) criteriaInfo[i].addData(traverseInfo[i].numSamples,
+													    	 traverseInfo[i].mean,
+															 traverseInfo[i].stdDeviation);
+
 						traverseData[i].erase(traverseData[i].begin(),traverseData[i].end());
-						if(FTest(i)) updateCriteria(i);
-						std::cout << "Number of samples: "<<criteriaInfo[0].numSamples<<std::endl;
-						std::cout << "Mean: "<<criteriaInfo[0].mean<<std::endl;
-						std::cout << "Standard deviation: "<<criteriaInfo[0].stdDeviation<<std::endl;
 						traverseInfo[i].erase();
+					}
+					if(rejectedInfo[i].numSamples > 30)
+					{
+						if(TTest(i)) criteriaInfo[i].addData(rejectedInfo[i].numSamples,
+													    	 rejectedInfo[i].mean,
+															 rejectedInfo[i].stdDeviation);
+						else if (rejectedInfo[i].numSamples >= criteriaInfo[i].numSamples &&
+								 rejectedInfo[i].stdDeviation < criteriaInfo[i].stdDeviation)
+						{
+							std::cout<<"\033[1;35mWARNING: The amount and quality of the rejected samples is greater than the saved ones, now we are using the rejected info as the correct one. \033[0m"<<std::endl;
+							traverseInfo[i].erase();
+							traverseInfo[i].addData(criteriaInfo[i].numSamples,
+												   	criteriaInfo[i].mean,
+												 	criteriaInfo[i].stdDeviation);
+							criteriaInfo[i].erase();
+							criteriaInfo[i].addData(rejectedInfo[i].numSamples,
+													rejectedInfo[i].mean,
+													rejectedInfo[i].stdDeviation);
+							rejectedInfo[i].erase();
+							rejectedInfo[i].addData(traverseInfo[i].numSamples,
+													traverseInfo[i].mean,
+													traverseInfo[i].stdDeviation);
+							traverseInfo[i].erase();
+
+						}
 					}
 				}
 			}	
+		}
+
+		bool TTest(int i)
+		{
+			double n1, n2, s1, s2, x1, x2, t;
+			n1 = criteriaInfo[i].numSamples;
+			n2 = rejectedInfo[i].numSamples;
+			s1 = criteriaInfo[i].stdDeviation;
+			s2 = rejectedInfo[i].stdDeviation;
+			x1 = criteriaInfo[i].mean;
+			x2 = rejectedInfo[i].mean;
+
+			bool result = false;
+			t = abs(x1-x2)/sqrt(pow(s1,2)/n1 + pow(s2,2)/n2);
+			if(t < 2.00) result = true; 
+			return result;			
 		}
 
 		bool FTest(int i)
@@ -311,8 +337,16 @@ namespace PathPlanning_lib
 
 			sp = sqrt(((n1-1)*pow(s1,2)+(n2-1)*pow(s2,2))/(n1+n2-2));
 			t = sqrt(n1*n2/(n1+n2))*(x1-x2)/sp;
-			if(t < 1.96) return true;
-			else return false;
+			if(t < 2.02) return true;
+			else
+			{
+				std::cout<<"\033[1;35mWARNING: Sample rejected after Student T test.\033[0m"<<std::endl;
+				rejectedInfo[i].addData(traverseInfo[i].numSamples,
+										traverseInfo[i].mean,
+										traverseInfo[i].stdDeviation);
+
+				return false;
+			}
 		}
 
 		bool cochranTTest(int i)
@@ -326,9 +360,14 @@ namespace PathPlanning_lib
 			x2 = traverseInfo[i].mean;
 
 			tcal = (x1-x2)/sqrt(pow(s1,2)/n1+pow(s2,2)/n2);
-			ttab = (1.96*pow(s1,2)/n1 + 2.22*pow(s2,2)/n2)/(pow(s1,2)/n1+pow(s2,2)/n2);
+			ttab = (2.02*pow(s1,2)/n1 + 2.22*pow(s2,2)/n2)/(pow(s1,2)/n1+pow(s2,2)/n2);
 			if(tcal < ttab) return true;
-			else return false;
+			else
+			{
+				std::cout<<"\033[1;35mWARNING: Sample rejected after Cochran T test.\033[0m"<<std::endl;
+				return false;
+			}
+
 		}
     };
 

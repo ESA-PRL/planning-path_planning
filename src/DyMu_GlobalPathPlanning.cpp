@@ -897,6 +897,7 @@ bool DyMuPathPlanner::initCoRaMethod(int numTerrains_, int numCriteria_, std::ve
 		{
 			terrainVector[i].criteriaInfo.resize(numCriteria);
 			terrainVector[i].traverseInfo.resize(numCriteria);
+			terrainVector[i].rejectedInfo.resize(numCriteria);
 			terrainVector[i].traverseData.resize(numCriteria);
 		}
 		return true;
@@ -944,7 +945,7 @@ std::vector<double> DyMuPathPlanner::updateCost()
 		costData.push_back(costData[i]/costRatios[i]);
 	
 	double minCost = costData[0];
-	for(int i = 1; i < n; i++) if(minCost > costData[i]) minCost = costData[i];
+	for(int i = 1; i < n + 1; i++) if(minCost > costData[i]) minCost = costData[i];
 
 	int counter = 0;
 	for(int i = 0; i < numTerrains; i++)
@@ -952,12 +953,19 @@ std::vector<double> DyMuPathPlanner::updateCost()
 		if(terrainVector[i].bTraversed)
 		{
 			for(int j = 0; j < range; j++)
-				cost_lutable[(i+1)*range*numLocs + j] = baseSpeed*(costData[counter]/minCost + terrainVector[i].slopeRatio*slope_range[j]);
+				cost_lutable[(i+1)*range*numLocs + j] = baseSpeed*costData[counter]/minCost + terrainVector[i].slopeRatio*slope_range[j];
 			counter++;
 		} 
 	}
 
-	std::cout << "Costs updated, new cost vector: ["<< cost_lutable[range*numLocs] <<", " << cost_lutable[2*range*numLocs]<<", " << cost_lutable[3*range*numLocs]<<"]" <<std::endl;
+	std::cout << "\033[1;34mCosts updated, new cost vector: ";
+	for(int i = 0; i < numTerrains; i++)
+	{
+		std::cout<<std::endl;	
+		for(int j = 0; j < range; j++)
+			std::cout << cost_lutable[(i+1)*range*numLocs + j]<<" "; 
+	}
+	std::cout << "\033[0m"<<std::endl;
 	return cost_lutable;
 }
 
