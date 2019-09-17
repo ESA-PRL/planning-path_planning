@@ -952,20 +952,16 @@ std::vector<double> DyMuPathPlanner::updateCost()
 	{
 		if(terrainVector[i].bTraversed)
 		{
+			double acc = 0;
 			for(int j = 0; j < range; j++)
-				cost_lutable[(i+1)*range*numLocs + j] = baseSpeed*costData[counter]/minCost + terrainVector[i].slopeRatio*slope_range[j];
+			{
+				acc += terrainVector[i].slopeRatio*slope_range[j];
+				cost_lutable[(i+1)*range*numLocs + j] = baseSpeed*costData[counter]/minCost + acc;
+			}
 			counter++;
 		} 
 	}
 
-	std::cout << "\033[1;34mCosts updated, new cost vector: ";
-	for(int i = 0; i < numTerrains; i++)
-	{
-		std::cout<<std::endl;	
-		for(int j = 0; j < range; j++)
-			std::cout << cost_lutable[(i+1)*range*numLocs + j]<<" "; 
-	}
-	std::cout << "\033[0m"<<std::endl;
 	return cost_lutable;
 }
 

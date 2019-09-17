@@ -267,7 +267,7 @@ namespace PathPlanning_lib
 						else if (rejectedInfo[i].numSamples >= criteriaInfo[i].numSamples &&
 								 rejectedInfo[i].stdDeviation < criteriaInfo[i].stdDeviation)
 						{
-							std::cout<<"\033[1;35mWARNING: The amount and quality of the rejected samples is greater than the saved ones, now we are using the rejected info as the correct one. \033[0m"<<std::endl;
+							std::cout<<"\033[1;35mWARNING: [Criteria "<<i<<"] The amount and quality of the rejected samples is greater than the saved ones, now we are using the rejected info as the correct one. \033[0m"<<std::endl;
 							traverseInfo[i].erase();
 							traverseInfo[i].addData(criteriaInfo[i].numSamples,
 												   	criteriaInfo[i].mean,
@@ -308,16 +308,8 @@ namespace PathPlanning_lib
 		{
 			double s1, s2, F;
 			bool result;
-			if(criteriaInfo[i].stdDeviation < traverseInfo[i].stdDeviation)
-			{
-				s1 = traverseInfo[i].stdDeviation;
-				s2 = criteriaInfo[i].stdDeviation;
-			}
-			else
-			{
-				s1 = criteriaInfo[i].stdDeviation;
-				s2 = traverseInfo[i].stdDeviation;
-			}
+			s1 = traverseInfo[i].stdDeviation;
+			s2 = criteriaInfo[i].stdDeviation;
 			
 			F = pow(s1,2)/pow(s2,2);
 			if(F < 2.05) result = studentTTest(i); 
@@ -340,7 +332,7 @@ namespace PathPlanning_lib
 			if(t < 2.02) return true;
 			else
 			{
-				std::cout<<"\033[1;35mWARNING: Sample rejected after Student T test.\033[0m"<<std::endl;
+				std::cout<<"\033[1;35mWARNING: [Criteria "<<i<<"] Sample rejected after Student T test.\033[0m"<<std::endl;
 				rejectedInfo[i].addData(traverseInfo[i].numSamples,
 										traverseInfo[i].mean,
 										traverseInfo[i].stdDeviation);
@@ -364,7 +356,7 @@ namespace PathPlanning_lib
 			if(tcal < ttab) return true;
 			else
 			{
-				std::cout<<"\033[1;35mWARNING: Sample rejected after Cochran T test.\033[0m"<<std::endl;
+				std::cout<<"\033[1;35mWARNING: [Criteria "<<i<<"] Sample rejected after Cochran T test.\033[0m"<<std::endl;
 				return false;
 			}
 
