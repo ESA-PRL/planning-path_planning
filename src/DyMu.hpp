@@ -14,9 +14,9 @@
                              Martin Azkarate
 *******************************************************************************/
 
-#include <base/samples/RigidBodyState.hpp>
-#include <base/samples/Frame.hpp>
 #include <base/Waypoint.hpp>
+#include <base/samples/Frame.hpp>
+#include <base/samples/RigidBodyState.hpp>
 #include <vector>
 
 #include <base-logging/Logging.hpp>
@@ -25,556 +25,566 @@
 
 namespace PathPlanning_lib
 {
-    //double INF = std::numeric_limits<double>::infinity();
-    enum node_state
-    {
-        OPEN,
-        CLOSED
-    };
+// double INF = std::numeric_limits<double>::infinity();
+enum node_state
+{
+    OPEN,
+    CLOSED
+};
 
-    enum repairingAproach
-    {
-        CONSERVATIVE, // Hazard Avoidance - FM*
-        SWEEPING // multiBiFM*
-    };
+enum repairingAproach
+{
+    CONSERVATIVE,  // Hazard Avoidance - FM*
+    SWEEPING       // multiBiFM*
+};
 
-    struct localNode
+struct localNode
+{
+    base::Pose2D pose;         // In Local Units respect to Global Node
+    base::Pose2D world_pose;   // In physical Units respect to World Frame
+    base::Pose2D parent_pose;  // Position of Global Node Parent In Global Units
+    base::Pose2D global_pose;  // Position of this local node in Global Units
+                               // respect to World Frame
+    double deviation;
+    double total_cost;
+    double cost;
+    double risk;
+    node_state state;
+    std::vector<localNode*> nb4List;
+    bool isObstacle;
+    localNode(uint x_, uint y_, base::Pose2D _parent_pose)
     {
-        base::Pose2D pose; //In Local Units respect to Global Node
-        base::Pose2D world_pose; //In physical Units respect to World Frame
-        base::Pose2D parent_pose; // Position of Global Node Parent In Global Units
-        base::Pose2D global_pose; // Position of this local node in Global Units respect to World Frame
-        double deviation;
-        double total_cost;
-        double cost;
-        double risk;
-        node_state state;
-        std::vector<localNode*> nb4List;
-        bool isObstacle;
-        localNode(uint x_, uint y_, base::Pose2D _parent_pose)
+        pose.position[0] = (double)x_;
+        pose.position[1] = (double)y_;
+        parent_pose = _parent_pose;
+        state = OPEN;
+        deviation = std::numeric_limits<double>::infinity();
+        total_cost = std::numeric_limits<double>::infinity();
+        isObstacle = false;
+        risk = 0.0;
+    }
+};
+
+struct globalNode
+{
+    base::Pose2D pose;
+    base::Pose2D world_pose;
+    double elevation;
+    double slope;
+    node_state state;
+    bool isObstacle;
+    bool hasLocalMap;  // Has it localmap?
+    double raw_cost;
+    double cost;
+    double hazard_density;  // Ratio of obstacle area in the global node area
+    double trafficability;
+    double total_cost;
+    unsigned int terrain;
+    std::vector<std::vector<localNode*>> localMap;
+    std::vector<globalNode*> nb4List;
+    std::vector<globalNode*> nb8List;
+    std::string nodeLocMode;
+    globalNode(uint x_, uint y_, double res, std::vector<double> offset)
+    {
+        pose.position[0] = (double)x_;
+        pose.position[1] = (double)y_;
+        world_pose.position[0] = (double)x_ * res + offset[0];
+        world_pose.position[1] = (double)y_ * res + offset[1];
+        // terrain = (unsigned int) t_;
+        // elevation = e_;
+
+        // risk.obstacle = r_;
+        isObstacle = false;
+        hasLocalMap = false;
+        raw_cost = 0.0;
+        cost = 0.0;
+        total_cost = std::numeric_limits<double>::infinity();
+        state = OPEN;
+        nodeLocMode = "DONT_CARE";
+        hazard_density = 0.0;
+        trafficability = 1.0;
+    }
+};
+
+struct costCriteria
+{
+    int num_samples;
+    double mean;
+    double std_deviation;
+    bool empty;
+    costCriteria(int num_samples_, double mean_, double std_deviation_)
+    {
+        num_samples = num_samples_;
+        mean = mean_;
+        std_deviation = std_deviation_;
+        empty = false;
+    }
+    costCriteria()
+    {
+        num_samples = 0;
+        mean = 0;
+        std_deviation = 0;
+        empty = true;
+    }
+
+    void addData(std::vector<double> new_samples)
+    {
+        int n = new_samples.size();
+        if (n != 0)
         {
-            pose.position[0] = (double)x_;
-            pose.position[1] = (double)y_;
-            parent_pose = _parent_pose;
-            state = OPEN;
-            deviation = std::numeric_limits<double>::infinity();
-            total_cost = std::numeric_limits<double>::infinity();
-            isObstacle = false;
-            risk = 0.0;
-        }
-    };
+            double sum = 0;
+            for (int i = 0; i < n; i++)
+            {
+                sum += new_samples[i];
+            }
+            double new_mean = (mean * num_samples + sum) / (num_samples + n);
 
-    struct globalNode
+            if (num_samples + n - 2 > 0)
+            {
+                double acc_diff = 0;
+                for (int i = 0; i < n; i++)
+                {
+                    if (!empty)
+                        acc_diff += (new_samples[i] - mean) * (new_samples[i] - new_mean);
+                    else
+                        acc_diff += pow(new_samples[i] - new_mean, 2);
+                }
+                std_deviation = sqrt((pow(std_deviation, 2) * (num_samples - 1) + acc_diff)
+                                     / (num_samples + n - 2));
+            }
+            else
+                std::cout << "ERROR: not enough samples to obtain standard deviation." << std::endl;
+
+            num_samples += n;
+            mean = new_mean;
+            empty = false;
+        }
+    }
+
+    void addData(int num_samples_, double mean_, double std_deviation_)
     {
-        base::Pose2D pose;
-        base::Pose2D world_pose;
-        double elevation;
-        double slope;
-        node_state state;
-        bool isObstacle;
-        bool hasLocalMap; //Has it localmap?
-        double raw_cost;
-        double cost;
-        double hazard_density; //Ratio of obstacle area in the global node area
-        double trafficability;
-        double total_cost;
-        unsigned int terrain;
-        std::vector< std::vector<localNode*> > localMap;
-        std::vector<globalNode*> nb4List;
-        std::vector<globalNode*> nb8List;
-        std::string nodeLocMode;
-        globalNode(uint x_, uint y_, double res, std::vector<double>  offset)
+        if (num_samples_ != 0)
         {
-            pose.position[0] = (double)x_;
-            pose.position[1] = (double)y_;
-            world_pose.position[0] = (double)x_*res + offset[0];
-            world_pose.position[1] = (double)y_*res + offset[1];
-            //terrain = (unsigned int) t_;
-            //elevation = e_;
+            double new_mean =
+                (mean * num_samples + mean_ * num_samples_) / (num_samples + num_samples_);
 
-            //risk.obstacle = r_;
-            isObstacle = false;
-            hasLocalMap = false;
-            raw_cost = 0.0;
-            cost = 0.0;
-            total_cost = std::numeric_limits<double>::infinity();
-            state = OPEN;
-            nodeLocMode = "DONT_CARE";
-            hazard_density = 0.0;
-            trafficability = 1.0;
+            std_deviation = sqrt((pow(std_deviation, 2) * (num_samples - 1)
+                                  + pow(std_deviation_, 2) * (num_samples_ - 1))
+                                 / (num_samples + num_samples_ - 2));
+
+            num_samples += num_samples_;
+            mean = new_mean;
+            empty = false;
         }
-    };
+    }
 
-    struct costCriteria
+    void addData(double new_sample)
     {
-		int numSamples;
-		double mean;
-		double stdDeviation;
-		bool bEmpty;
-		costCriteria(int numSamples_, double mean_, double stdDeviation_)
-		{
-			numSamples = numSamples_;
-			mean = mean_;
-			stdDeviation = stdDeviation_;
-			bEmpty = false;
-		}
-		costCriteria()
-		{
-			numSamples = 0;
-			mean = 0;
-			stdDeviation = 0;
-			bEmpty = true;
-		}
+        double new_mean = (mean * num_samples + new_sample) / (num_samples + 1);
 
-		void addData(std::vector<double> newSamples)
-		{
-			int n = newSamples.size();
-			if(n != 0) 	
-			{
-				double sum = 0;
-				for(int i = 0; i < n; i++)
-				{
-					sum += newSamples[i];
-				}
-				double newMean = (mean*numSamples + sum)/(numSamples + n);
+        double acc_diff;
+        if (!empty) acc_diff = (new_sample - mean) * (new_sample - new_mean);
+        std_deviation =
+            sqrt((pow(std_deviation, 2) * (num_samples - 1) + acc_diff) / (num_samples + 1 - 2));
 
-				if(numSamples + n - 2 > 0)
-				{
-					double accDiff = 0;
-					for(int i = 0; i < n; i++)
-					{
-						if(!bEmpty) 	
-							accDiff += (newSamples[i] - mean)*(newSamples[i] - newMean);
-						else 		
-							accDiff += pow(newSamples[i] - newMean,2);
-					}
-					stdDeviation = sqrt((pow(stdDeviation,2)*(numSamples - 1) + accDiff)/(numSamples + n - 2));
-				}
-				else std::cout << "ERROR: not enough samples to obtain standard deviation."<<std::endl; 
+        num_samples += 1;
+        mean = new_mean;
+        empty = false;
+    }
 
-				numSamples += n;
-				mean = newMean;		
-				bEmpty = false;
-			}
-		}
+    void erase()
+    {
+        num_samples = 0;
+        mean = 0;
+        std_deviation = 0;
+        empty = true;
+    }
+};
 
-		void addData(int numSamples_, double mean_, double stdDeviation_)
-		{
-			if(numSamples_ != 0) 	
-			{
-				double newMean = (mean*numSamples + mean_*numSamples_)/(numSamples + numSamples_);
+struct segmentedTerrain
+{
+    double cost;
+    double slope_ratio;  // Ratio of increasing cost per degree (u/°)
+    std::vector<costCriteria> criteria_info, traverse_info, rejected_info;
+    std::vector<std::vector<double>> data_samples;
+    bool traversed;
+    segmentedTerrain()
+    {
+        cost = 1;
+        slope_ratio = 1;
+        traversed = false;
+    }
+    segmentedTerrain(double cost_, double slope_ratio_)
+    {
+        cost = cost_;
+        slope_ratio = slope_ratio_;
+        traversed = false;
+    }
+    segmentedTerrain(std::vector<costCriteria> criteria_info_)
+    {
+        criteria_info.resize(criteria_info_.size());
+        traverse_info.resize(criteria_info_.size());
+        criteria_info = criteria_info_;
+        traversed = true;
+    }
 
-				stdDeviation = sqrt((pow(stdDeviation,2)*(numSamples - 1) + 
-				pow(stdDeviation_,2)*(numSamples_ - 1))/(numSamples + numSamples_ - 2));
+    void dataAnalysis()
+    {
+        if (!traversed)
+        {
+            for (int i = 0; i < criteria_info.size(); i++)
+            {
+                if (data_samples[i].size() > 30)
+                {
+                    traverse_info[i].addData(data_samples[i]);
+                    data_samples[i].erase(data_samples[i].begin(), data_samples[i].end());
+                    criteria_info[i].addData(traverse_info[i].num_samples,
+                                             traverse_info[i].mean,
+                                             traverse_info[i].std_deviation);
 
-				numSamples += numSamples_;
-				mean = newMean;		
-				bEmpty = false;
-			}
-		}
+                    traverse_info[i].erase();
+                    traversed = true;
+                }
+            }
+            if (traversed)
+            {
+                std::cout << "\033[1;32mNow we have gathered enough info of the "
+                             "current terrain.\033[0m"
+                          << std::endl;
+            }
+        }
+        else
+        {
+            for (int i = 0; i < criteria_info.size(); i++)
+            {
+                if (data_samples[i].size() > 9)
+                {
+                    traverse_info[i].addData(data_samples[i]);
+                    if (FTest(i))
+                        criteria_info[i].addData(traverse_info[i].num_samples,
+                                                 traverse_info[i].mean,
+                                                 traverse_info[i].std_deviation);
 
-		void addData(double newSample)
-		{
-			double newMean = (mean*numSamples + newSample)/(numSamples + 1);
+                    data_samples[i].erase(data_samples[i].begin(), data_samples[i].end());
+                    traverse_info[i].erase();
+                }
+                if (rejected_info[i].num_samples > 30)
+                {
+                    if (TTest(i))
+                        criteria_info[i].addData(rejected_info[i].num_samples,
+                                                 rejected_info[i].mean,
+                                                 rejected_info[i].std_deviation);
+                    else if (rejected_info[i].num_samples >= criteria_info[i].num_samples
+                             && rejected_info[i].std_deviation < criteria_info[i].std_deviation)
+                    {
+                        std::cout << "\033[1;35mWARNING: [Criteria " << i
+                                  << "] The amount and quality of the rejected samples is "
+                                     "greater than the saved ones, now we are using the "
+                                     "rejected info as the correct one. \033[0m"
+                                  << std::endl;
+                        traverse_info[i].erase();
+                        traverse_info[i].addData(criteria_info[i].num_samples,
+                                                 criteria_info[i].mean,
+                                                 criteria_info[i].std_deviation);
+                        criteria_info[i].erase();
+                        criteria_info[i].addData(rejected_info[i].num_samples,
+                                                 rejected_info[i].mean,
+                                                 rejected_info[i].std_deviation);
+                        rejected_info[i].erase();
+                        rejected_info[i].addData(traverse_info[i].num_samples,
+                                                 traverse_info[i].mean,
+                                                 traverse_info[i].std_deviation);
+                        traverse_info[i].erase();
+                    }
+                }
+            }
+        }
+    }
 
-			double accDiff;
-			if(!bEmpty)	accDiff = (newSample - mean)*(newSample - newMean);
-			stdDeviation = sqrt((pow(stdDeviation,2)*(numSamples - 1) + accDiff)/(numSamples + 1 - 2));
+    bool TTest(int i)
+    {
+        double n1, n2, s1, s2, x1, x2, t;
+        n1 = criteria_info[i].num_samples;
+        n2 = rejected_info[i].num_samples;
+        s1 = criteria_info[i].std_deviation;
+        s2 = rejected_info[i].std_deviation;
+        x1 = criteria_info[i].mean;
+        x2 = rejected_info[i].mean;
 
-			numSamples += 1;
-			mean = newMean;		
-			bEmpty = false;
-		}
+        bool result = false;
+        t = abs(x1 - x2) / sqrt(pow(s1, 2) / n1 + pow(s2, 2) / n2);
+        if (t < 2.00) result = true;
+        return result;
+    }
 
-		void erase()
-		{
-			numSamples = 0;
-			mean = 0;
-			stdDeviation = 0;
-			bEmpty = true;
-		}	
-	};
+    bool FTest(int i)
+    {
+        double s1, s2, F;
+        bool result;
+        s1 = traverse_info[i].std_deviation;
+        s2 = criteria_info[i].std_deviation;
 
-	struct segmentedTerrain
-	{
-		double cost;
-		double slopeRatio; 			 // Ratio of increasing cost per degree (u/°)
-		std::vector<costCriteria> criteriaInfo, traverseInfo, rejectedInfo;
-		std::vector<std::vector<double>> traverseData;
-		bool bTraversed;
-		segmentedTerrain()
-		{
-			cost = 1;
-			slopeRatio = 1;
-			bTraversed = false;
-		}
-		segmentedTerrain(double cost_, double slopeRatio_)
-		{
-			cost = cost_;
-			slopeRatio = slopeRatio_;		
-			bTraversed = false;
-		}
-		segmentedTerrain(std::vector<costCriteria> criteriaInfo_)
-		{
-			criteriaInfo.resize(criteriaInfo_.size());
-			traverseInfo.resize(criteriaInfo_.size());
-			criteriaInfo = criteriaInfo_;
-			bTraversed = true;
-		}
+        F = pow(s1, 2) / pow(s2, 2);
+        if (F < 2.05)
+            result = studentTTest(i);
+        else
+            result = cochranTTest(i);
+        return result;
+    }
 
-		void dataAnalysis()
-		{
-			if(!bTraversed)
-			{
-				for(int i = 0; i < criteriaInfo.size(); i++)
-				{
-					if(traverseData[i].size() > 30)
-					{
-						traverseInfo[i].addData(traverseData[i]);
-						traverseData[i].erase(traverseData[i].begin(),traverseData[i].end());
-						criteriaInfo[i].addData(traverseInfo[i].numSamples,
-										traverseInfo[i].mean,
-										traverseInfo[i].stdDeviation);
+    bool studentTTest(int i)
+    {
+        double n1, n2, s1, s2, x1, x2, sp, t;
+        n1 = criteria_info[i].num_samples;
+        n2 = traverse_info[i].num_samples;
+        s1 = criteria_info[i].std_deviation;
+        s2 = traverse_info[i].std_deviation;
+        x1 = criteria_info[i].mean;
+        x2 = traverse_info[i].mean;
 
-						traverseInfo[i].erase();
-						bTraversed = true;
-					}
-				}	
-				if(bTraversed) 
-				{
-					std::cout <<  "\033[1;32mNow we have gathered enough info of the current terrain.\033[0m"<<std::endl;
-				}
-			}
-			else
-			{
-				for(int i = 0; i < criteriaInfo.size(); i++)
-				{
-					if(traverseData[i].size() > 9)
-					{
-						traverseInfo[i].addData(traverseData[i]);
-						if(FTest(i)) criteriaInfo[i].addData(traverseInfo[i].numSamples,
-													    	 traverseInfo[i].mean,
-															 traverseInfo[i].stdDeviation);
+        sp = sqrt(((n1 - 1) * pow(s1, 2) + (n2 - 1) * pow(s2, 2)) / (n1 + n2 - 2));
+        t = sqrt(n1 * n2 / (n1 + n2)) * (x1 - x2) / sp;
+        if (t < 2.02)
+            return true;
+        else
+        {
+            std::cout << "\033[1;35mWARNING: [Criteria " << i
+                      << "] Sample rejected after Student T test.\033[0m" << std::endl;
+            rejected_info[i].addData(traverse_info[i].num_samples,
+                                     traverse_info[i].mean,
+                                     traverse_info[i].std_deviation);
 
-						traverseData[i].erase(traverseData[i].begin(),traverseData[i].end());
-						traverseInfo[i].erase();
-					}
-					if(rejectedInfo[i].numSamples > 30)
-					{
-						if(TTest(i)) criteriaInfo[i].addData(rejectedInfo[i].numSamples,
-													    	 rejectedInfo[i].mean,
-															 rejectedInfo[i].stdDeviation);
-						else if (rejectedInfo[i].numSamples >= criteriaInfo[i].numSamples &&
-								 rejectedInfo[i].stdDeviation < criteriaInfo[i].stdDeviation)
-						{
-							std::cout<<"\033[1;35mWARNING: [Criteria "<<i<<"] The amount and quality of the rejected samples is greater than the saved ones, now we are using the rejected info as the correct one. \033[0m"<<std::endl;
-							traverseInfo[i].erase();
-							traverseInfo[i].addData(criteriaInfo[i].numSamples,
-												   	criteriaInfo[i].mean,
-												 	criteriaInfo[i].stdDeviation);
-							criteriaInfo[i].erase();
-							criteriaInfo[i].addData(rejectedInfo[i].numSamples,
-													rejectedInfo[i].mean,
-													rejectedInfo[i].stdDeviation);
-							rejectedInfo[i].erase();
-							rejectedInfo[i].addData(traverseInfo[i].numSamples,
-													traverseInfo[i].mean,
-													traverseInfo[i].stdDeviation);
-							traverseInfo[i].erase();
+            return false;
+        }
+    }
 
-						}
-					}
-				}
-			}	
-		}
+    bool cochranTTest(int i)
+    {
+        double n1, n2, s1, s2, x1, x2, tcal, ttab;
+        n1 = criteria_info[i].num_samples;
+        n2 = traverse_info[i].num_samples;
+        s1 = criteria_info[i].std_deviation;
+        s2 = traverse_info[i].std_deviation;
+        x1 = criteria_info[i].mean;
+        x2 = traverse_info[i].mean;
 
-		bool TTest(int i)
-		{
-			double n1, n2, s1, s2, x1, x2, t;
-			n1 = criteriaInfo[i].numSamples;
-			n2 = rejectedInfo[i].numSamples;
-			s1 = criteriaInfo[i].stdDeviation;
-			s2 = rejectedInfo[i].stdDeviation;
-			x1 = criteriaInfo[i].mean;
-			x2 = rejectedInfo[i].mean;
-
-			bool result = false;
-			t = abs(x1-x2)/sqrt(pow(s1,2)/n1 + pow(s2,2)/n2);
-			if(t < 2.00) result = true; 
-			return result;			
-		}
-
-		bool FTest(int i)
-		{
-			double s1, s2, F;
-			bool result;
-			s1 = traverseInfo[i].stdDeviation;
-			s2 = criteriaInfo[i].stdDeviation;
-			
-			F = pow(s1,2)/pow(s2,2);
-			if(F < 2.05) result = studentTTest(i); 
-			else result = cochranTTest(i);
-			return result;			
-		}
-
-		bool studentTTest(int i)
-		{
-			double n1, n2, s1, s2, x1, x2, sp, t;
-			n1 = criteriaInfo[i].numSamples;
-			n2 = traverseInfo[i].numSamples;
-			s1 = criteriaInfo[i].stdDeviation;
-			s2 = traverseInfo[i].stdDeviation;
-			x1 = criteriaInfo[i].mean;
-			x2 = traverseInfo[i].mean;
-
-			sp = sqrt(((n1-1)*pow(s1,2)+(n2-1)*pow(s2,2))/(n1+n2-2));
-			t = sqrt(n1*n2/(n1+n2))*(x1-x2)/sp;
-			if(t < 2.02) return true;
-			else
-			{
-				std::cout<<"\033[1;35mWARNING: [Criteria "<<i<<"] Sample rejected after Student T test.\033[0m"<<std::endl;
-				rejectedInfo[i].addData(traverseInfo[i].numSamples,
-										traverseInfo[i].mean,
-										traverseInfo[i].stdDeviation);
-
-				return false;
-			}
-		}
-
-		bool cochranTTest(int i)
-		{
-			double n1, n2, s1, s2, x1, x2, tcal, ttab;
-			n1 = criteriaInfo[i].numSamples;
-			n2 = traverseInfo[i].numSamples;
-			s1 = criteriaInfo[i].stdDeviation;
-			s2 = traverseInfo[i].stdDeviation;
-			x1 = criteriaInfo[i].mean;
-			x2 = traverseInfo[i].mean;
-
-			tcal = (x1-x2)/sqrt(pow(s1,2)/n1+pow(s2,2)/n2);
-			ttab = (2.02*pow(s1,2)/n1 + 2.22*pow(s2,2)/n2)/(pow(s1,2)/n1+pow(s2,2)/n2);
-			if(tcal < ttab) return true;
-			else
-			{
-				std::cout<<"\033[1;35mWARNING: [Criteria "<<i<<"] Sample rejected after Cochran T test.\033[0m"<<std::endl;
-				return false;
-			}
-
-		}
-    };
+        tcal = (x1 - x2) / sqrt(pow(s1, 2) / n1 + pow(s2, 2) / n2);
+        ttab =
+            (2.02 * pow(s1, 2) / n1 + 2.22 * pow(s2, 2) / n2) / (pow(s1, 2) / n1 + pow(s2, 2) / n2);
+        if (tcal < ttab)
+            return true;
+        else
+        {
+            std::cout << "\033[1;35mWARNING: [Criteria " << i
+                      << "] Sample rejected after Cochran T test.\033[0m" << std::endl;
+            return false;
+        }
+    }
+};
 
 //__DYMU_PATH_PLANNER_CLASS__
-    class DyMuPathPlanner
-    {
-        private:
-          // Global Layer
-            std::vector< std::vector<globalNode*> > global_layer;
-          // Dimensions
-            uint num_nodes_X;
-            uint num_nodes_Y;
-          // Global Resolution (same for X and Y axii)
-            double global_res;
-          // Offset of Global Node (0,0) with respect to world frame
-            std::vector<double> global_offset;
-          // Local Resolution (same for X and Y axii)
-            double local_res;
-          // Local Nodes contained within a Global Node edge
-            uint res_ratio;
+class DyMuPathPlanner
+{
+  private:
+    // Global Layer
+    std::vector<std::vector<globalNode*>> global_layer;
+    // Dimensions
+    uint num_nodes_X;
+    uint num_nodes_Y;
+    // Global Resolution (same for X and Y axii)
+    double global_res;
+    // Offset of Global Node (0,0) with respect to world frame
+    std::vector<double> global_offset;
+    // Local Resolution (same for X and Y axii)
+    double local_res;
+    // Local Nodes contained within a Global Node edge
+    uint res_ratio;
 
-          // Local Repairing Parameters
-          // Risk Distance = Risky proximity to obstacles
-            double risk_distance;
-          // Distance to reconnect after first safe waypoint
-            // - Only relevant for Conservative Approach (Hazard Avoidance mode)
-            double reconnect_distance;
-          // Parameter that controls curvature of resulting repaired paths
-            double risk_ratio;
-          // Vector of slope values from 0 to the maximum feasible slope
-            std::vector<double> slope_range;
-          // Vector of available locomotion modes
-            std::vector<std::string> locomotion_modes;
-          // Approach chosen to do the repairings
-            repairingAproach repairing_approach;
+    // Local Repairing Parameters
+    // Risk Distance = Risky proximity to obstacles
+    double risk_distance;
+    // Distance to reconnect after first safe waypoint
+    // - Only relevant for Conservative Approach (Hazard Avoidance mode)
+    double reconnect_distance;
+    // Parameter that controls curvature of resulting repaired paths
+    double risk_ratio;
+    // Vector of slope values from 0 to the maximum feasible slope
+    std::vector<double> slope_range;
+    // Vector of available locomotion modes
+    std::vector<std::string> locomotion_modes;
+    // Approach chosen to do the repairings
+    repairingAproach repairing_approach;
 
-		  // Cost ratio updating
-		  // Vector of terrain segmentation info
-			std::vector<segmentedTerrain> terrainVector;
-		  // Vector of criteria weights
-			std::vector<double> weights;
-		  // Number of segmented terrains
-			int numTerrains;
-		  // Number of parameters used for cost updating
-			int numCriteria;
-		  // Base speed to obtain costs
-			double baseSpeed;
-        public:
-          // -- PARAMETERS --
+    // Cost ratio updating
+    // Vector of terrain segmentation info
+    std::vector<segmentedTerrain> terrain_vector;
+    // Vector of criteria weights
+    std::vector<double> weights;
+    // Number of segmented terrains
+    int num_terrains;
+    // Number of parameters used for cost updating
+    int num_criteria;
+    // Base speed to obtain costs
+    double base_speed;
 
-          // The narrow band is formed by those open nodes that have been
-          // already visited by the FMM solver
-            std::vector<globalNode*> global_narrowband;
-          // Compilation of all visited Global Nodes
-            std::vector<globalNode*> global_propagated_nodes;
-          // Same concept of narrow band as in the global computation
-            std::vector<localNode*> local_narrowband;
-          // Obstacle Local Nodes whose associated risk must be computed
-            std::vector<localNode*> local_expandable_obstacles;
-          // Same concept as in global
-            std::vector<localNode*> local_propagated_nodes;
-          // The last computed path
-            std::vector<base::Waypoint> current_path;
-          // LookUp Table containing cost values per terrain and slope value
-            std::vector<double> cost_lutable;
-          // Global Node containing the goal
-            globalNode * global_goal;
-          // Local Node containing the position of the agent
-            localNode * local_agent;
-          // Total Cost needed by the agent to reach the goal
-            double remaining_total_cost;
+  public:
+    // -- PARAMETERS --
 
-          //Index to current path in which the local path meets global
-            int reconnecting_index;
+    // The narrow band is formed by those open nodes that have been
+    // already visited by the FMM solver
+    std::vector<globalNode*> global_narrowband;
+    // Compilation of all visited Global Nodes
+    std::vector<globalNode*> global_propagated_nodes;
+    // Same concept of narrow band as in the global computation
+    std::vector<localNode*> local_narrowband;
+    // Obstacle Local Nodes whose associated risk must be computed
+    std::vector<localNode*> local_expandable_obstacles;
+    // Same concept as in global
+    std::vector<localNode*> local_propagated_nodes;
+    // The last computed path
+    std::vector<base::Waypoint> current_path;
+    // LookUp Table containing cost values per terrain and slope value
+    std::vector<double> cost_lutable;
+    // Global Node containing the goal
+    globalNode* global_goal;
+    // Local Node containing the position of the agent
+    localNode* local_agent;
+    // Total Cost needed by the agent to reach the goal
+    double remaining_total_cost;
 
-          // -- FUNCTIONS --
-          // Class Constructor
-            DyMuPathPlanner(double risk_distance,
-                            double reconnect_distance,
-                            double risk_ratio,
-                            repairingAproach input_approach);
-          // Class Destructor
-            ~DyMuPathPlanner();
-          // Initialization of Global Layer using Elevation and Terrain Maps
-            bool initGlobalLayer(double globalres,  double localres,
-                                 uint num_nodes_X, uint num_nodes_Y,
-                                 std::vector<double> offset);
+    // Index to current path in which the local path meets global
+    int reconnecting_index;
 
-            bool setCostMap(std::vector< std::vector<double> > cost_map);
+    // -- FUNCTIONS --
+    // Class Constructor
+    DyMuPathPlanner(double risk_distance,
+                    double reconnect_distance,
+                    double risk_ratio,
+                    repairingAproach input_approach);
+    // Class Destructor
+    ~DyMuPathPlanner();
+    // Initialization of Global Layer using Elevation and Terrain Maps
+    bool initGlobalLayer(double globalres,
+                         double localres,
+                         uint num_nodes_X,
+                         uint num_nodes_Y,
+                         std::vector<double> offset);
 
-            bool computeCostMap(std::vector<double> costData,
-                            std::vector<double> slope_values,
-                            std::vector<std::string> locomotionModes,
-                            std::vector< std::vector<double> > elevation,
-                                std::vector< std::vector<double> > terrainMap);
+    bool setCostMap(std::vector<std::vector<double>> cost_map);
 
-          // Slope is calculated for nodeTarget
-            void calculateSlope(globalNode* nodeTarget);
+    bool computeCostMap(std::vector<double> cost_data,
+                        std::vector<double> slope_values,
+                        std::vector<std::string> locomotionModes,
+                        std::vector<std::vector<double>> elevation,
+                        std::vector<std::vector<double>> terrainMap);
 
-            void calculateNominalCost(globalNode* nodeTarget, int range,
-                                      int numLocs);
+    // Slope is calculated for nodeTarget
+    void calculateSlope(globalNode* nodeTarget);
 
-            void smoothCost(globalNode* nodeTarget);
+    void calculateNominalCost(globalNode* nodeTarget, int range, int numLocs);
 
-          // Returns global node (i,j)
-            globalNode* getGlobalNode(uint i, uint j);
+    void smoothCost(globalNode* nodeTarget);
 
-            bool setGoal(base::Waypoint wGoal);
+    // Returns global node (i,j)
+    globalNode* getGlobalNode(uint i, uint j);
 
-            bool computeTotalCostMap(base::Waypoint wPos);
-            bool computeEntireTotalCostMap();
+    bool setGoal(base::Waypoint wGoal);
 
-            void resetTotalCostMap();
-            void resetGlobalNarrowBand();
+    bool computeTotalCostMap(base::Waypoint wPos);
+    bool computeEntireTotalCostMap();
 
-            void propagateGlobalNode(globalNode* nodeTarget);
+    void resetTotalCostMap();
+    void resetGlobalNarrowBand();
 
-            globalNode* minCostGlobalNode();
+    void propagateGlobalNode(globalNode* nodeTarget);
 
-            globalNode* getNearestGlobalNode(base::Pose2D pos);
-            globalNode* getNearestGlobalNode(base::Waypoint wPos);
+    globalNode* minCostGlobalNode();
 
-            std::vector<base::Waypoint> getPath(base::Waypoint wPos);
+    globalNode* getNearestGlobalNode(base::Pose2D pos);
+    globalNode* getNearestGlobalNode(base::Waypoint wPos);
 
-            bool computeGlobalPath(base::Waypoint wPos);
+    std::vector<base::Waypoint> getPath(base::Waypoint wPos);
 
-            base::Waypoint computeNextGlobalWaypoint(base::Waypoint& wPos,
-                                                       double tau);
+    bool computeGlobalPath(base::Waypoint wPos);
 
-            void gradientNode(globalNode* nodeTarget, double& dnx, double& dny);
+    base::Waypoint computeNextGlobalWaypoint(base::Waypoint& wPos, double tau);
 
-            double interpolate(double a, double b, double g00, double g01,
-                               double g10, double g11);
+    void gradientNode(globalNode* nodeTarget, double& dnx, double& dny);
 
-            std::string getLocomotionMode(base::Waypoint wPos);
+    double interpolate(double a, double b, double g00, double g01, double g10, double g11);
 
-            std::vector< std::vector<double> > getTotalCostMatrix();
-            std::vector< std::vector<double> > getGlobalCostMatrix();
-            std::vector< std::vector<double> > getHazardDensityMatrix();
-            std::vector< std::vector<double> > getTrafficabilityMatrix();
+    std::string getLocomotionMode(base::Waypoint wPos);
 
-            double getTotalCost(base::Waypoint wInt);
+    std::vector<std::vector<double>> getTotalCostMatrix();
+    std::vector<std::vector<double>> getGlobalCostMatrix();
+    std::vector<std::vector<double>> getHazardDensityMatrix();
+    std::vector<std::vector<double>> getTrafficabilityMatrix();
 
-          // LOCAL PATH REPAIRING
+    double getTotalCost(base::Waypoint wInt);
 
-            void createLocalMap(globalNode* gNode);
+    // LOCAL PATH REPAIRING
 
-            localNode* getLocalNode(base::Pose2D pos);
-            localNode* getLocalNode(base::Waypoint wPos);
+    void createLocalMap(globalNode* gNode);
 
-            void subdivideGlobalNode(globalNode* gNode);
+    localNode* getLocalNode(base::Pose2D pos);
+    localNode* getLocalNode(base::Waypoint wPos);
 
-            bool computeLocalPlanning(base::Waypoint wPos,
-                                  base::samples::frame::Frame traversabilityMap,
-                                  double res,
-                                  std::vector<base::Waypoint>& trajectory,
-                                  base::Time &localTime);
+    void subdivideGlobalNode(globalNode* gNode);
 
-            void expandRisk();
+    bool computeLocalPlanning(base::Waypoint wPos,
+                              base::samples::frame::Frame traversabilityMap,
+                              double res,
+                              std::vector<base::Waypoint>& trajectory,
+                              base::Time& localTime);
 
-            localNode* maxRiskNode();
+    void expandRisk();
 
-            void propagateRisk(localNode* nodeTarget);
+    localNode* maxRiskNode();
 
-            void setHorizonCost(localNode* horizonNode);
+    void propagateRisk(localNode* nodeTarget);
 
-            double getTotalCost(localNode* lNode);
+    void setHorizonCost(localNode* horizonNode);
 
-            localNode * computeLocalPropagation(base::Waypoint wInit, base::Waypoint wOvertake);
+    double getTotalCost(localNode* lNode);
 
-            void propagateLocalNode(localNode* nodeTarget);
+    localNode* computeLocalPropagation(base::Waypoint wInit, base::Waypoint wOvertake);
 
-            localNode* minCostLocalNode(double Tovertake, double minC);
+    void propagateLocalNode(localNode* nodeTarget);
 
-            localNode* minCostLocalNode(localNode* reachNode);
+    localNode* minCostLocalNode(double Tovertake, double minC);
 
-            std::vector<base::Waypoint> getLocalPath(localNode * lSetNode,
-                                                     base::Waypoint wInit,
-                                                     double tau);
+    localNode* minCostLocalNode(localNode* reachNode);
 
+    std::vector<base::Waypoint> getLocalPath(localNode* lSetNode, base::Waypoint wInit, double tau);
 
+    bool computeLocalWaypointGDM(base::Waypoint& wPos, double tau);
+    base::Waypoint computeLocalWaypointDijkstra(localNode* lNode);
 
+    void gradientNode(localNode* nodeTarget, double& dnx, double& dny);
 
-            bool computeLocalWaypointGDM(base::Waypoint& wPos, double tau);
-            base::Waypoint computeLocalWaypointDijkstra(localNode * lNode);
+    bool evaluatePath(uint starting_index);
 
+    bool isBlockingObstacle(localNode* obNode, uint& maxIndex, uint& minIndex);
 
-            void gradientNode(localNode* nodeTarget, double& dnx, double& dny);
+    // void repairPath(std::vector<base::Waypoint>& trajectory, uint minIndex,
+    // uint maxIndex);
+    int repairPath(base::Waypoint wInit, uint index);
 
+    // TODO: Make function to change repairing approach anytime
 
+    std::vector<std::vector<double>> getRiskMatrix(base::Waypoint rover_pos);
+    std::vector<std::vector<double>> getDeviationMatrix(base::Waypoint rover_pos);
 
+    // COST RATIO UPDATING AFTER TRAVERSE (CoRa)
 
+    bool initCoRaMethod(int num_terrains_, int num_criteria_, std::vector<double> weights_);
+    int getTerrain(base::Waypoint current_pos);
+    bool fillTerrainInfo(int terrain_id, std::vector<double> data);
 
-            bool evaluatePath(uint starting_index);
+    std::vector<double> updateCost();
+    std::vector<double> computeCostRatio();
+};
 
-            bool isBlockingObstacle(localNode* obNode, uint& maxIndex, uint& minIndex);
+}  // end namespace
 
-            //void repairPath(std::vector<base::Waypoint>& trajectory, uint minIndex, uint maxIndex);
-            int repairPath(base::Waypoint wInit, uint index);
-
-            //TODO: Make function to change repairing approach anytime
-
-            std::vector< std::vector<double> > getRiskMatrix(base::Waypoint rover_pos);
-            std::vector< std::vector<double> > getDeviationMatrix(base::Waypoint rover_pos);
-
-			// COST RATIO UPDATING AFTER TRAVERSE (CoRa)
-	
-			bool initCoRaMethod(int numTerrains_, int numCriteria_, std::vector<double> weights_);
-			int getTerrain(base::Waypoint currentPos);
-			bool fillTerrainInfo(int terrainId, std::vector<double> data);
-			
-			std::vector<double> updateCost();
-			std::vector<double> computeCostRatio();
-    };
-
-} // end namespace
-
-#endif // _PATHPLANNING_LIBRARIES_HPP_
+#endif  // _PATHPLANNING_LIBRARIES_HPP_
