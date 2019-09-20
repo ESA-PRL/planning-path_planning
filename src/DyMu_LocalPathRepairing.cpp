@@ -1201,3 +1201,5 @@ std::vector<std::vector<double>> DyMuPathPlanner::getDeviationMatrix(base::Waypo
     // std::cout << "Done" << std::endl;
     return dev_matrix;
 }
+
+int DyMuPathPlanner::getReconnectingIndex() { return reconnecting_index; }

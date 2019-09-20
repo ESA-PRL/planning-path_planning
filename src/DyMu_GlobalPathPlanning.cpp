@@ -850,19 +850,20 @@ bool DyMuPathPlanner::fillTerrainInfo(int terrain_id, std::vector<double> data)
     {
         for (int i = 0; i < num_criteria; i++)
             if (data[i] > 0) terrain_vector[terrain_id].data_samples[i].push_back(data[i]);
-
         return true;
     }
     else
         return false;
 }
 
-int DyMuPathPlanner::getTerrain(base::Waypoint current_pos)
+int DyMuPathPlanner::getTerrain(base::samples::RigidBodyState current_pos)
 {
     int terrain_index;
-    globalNode* current_node = getNearestGlobalNode(current_pos);
+    base::Pose2D pose;
+    pose.position[0] = current_pos.position[0];
+    pose.position[1] = current_pos.position[1];
+    globalNode* current_node = getNearestGlobalNode(pose);
     terrain_index = current_node->terrain - 1;
-    // if(terrain_index < 0) terrain_index = 0; //TODO debug if obstacle
     return terrain_index;
 }
 
@@ -928,7 +929,6 @@ std::vector<double> DyMuPathPlanner::computeCostRatio()
                 for (int j = 0; j < num_criteria; j++)
                     sum += weights[j] * terrain_vector[i].criteria_info[j].mean
                            / terrain_vector[i + next].criteria_info[j].mean;
-
                 cost_ratios.push_back(sum / acc_weight);
             }
         }

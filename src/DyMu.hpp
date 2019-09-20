@@ -234,23 +234,19 @@ struct segmentedTerrain
         {
             for (int i = 0; i < criteria_info.size(); i++)
             {
-                if (data_samples[i].size() > 30)
+                if (data_samples[i].size() > 2)
                 {
-                    traverse_info[i].addData(data_samples[i]);
+                    criteria_info[i].addData(data_samples[i]);
                     data_samples[i].erase(data_samples[i].begin(), data_samples[i].end());
-                    criteria_info[i].addData(traverse_info[i].num_samples,
-                                             traverse_info[i].mean,
-                                             traverse_info[i].std_deviation);
-
-                    traverse_info[i].erase();
-                    traversed = true;
                 }
-            }
-            if (traversed)
-            {
-                std::cout << "\033[1;32mNow we have gathered enough info of the "
-                             "current terrain.\033[0m"
-                          << std::endl;
+
+                if (criteria_info[i].num_samples > 29)
+                {
+                    traversed = true;
+                    std::cout << "\033[1;32mNow we have gathered enough info of the "
+                                 "current terrain.\033[0m"
+                              << std::endl;
+                }
             }
         }
         else
@@ -268,7 +264,7 @@ struct segmentedTerrain
                     data_samples[i].erase(data_samples[i].begin(), data_samples[i].end());
                     traverse_info[i].erase();
                 }
-                if (rejected_info[i].num_samples > 30)
+                if (rejected_info[i].num_samples > 29)
                 {
                     if (TTest(i))
                         criteria_info[i].addData(rejected_info[i].num_samples,
@@ -277,7 +273,7 @@ struct segmentedTerrain
                     else if (rejected_info[i].num_samples >= criteria_info[i].num_samples
                              && rejected_info[i].std_deviation < criteria_info[i].std_deviation)
                     {
-                        std::cout << "\033[1;35mWARNING: [Criteria " << i
+                        std::cout << "\033[1;35mWARNING: [Criteria " << i + 1
                                   << "] The amount and quality of the rejected samples is "
                                      "greater than the saved ones, now we are using the "
                                      "rejected info as the correct one. \033[0m"
@@ -348,7 +344,7 @@ struct segmentedTerrain
             return true;
         else
         {
-            std::cout << "\033[1;35mWARNING: [Criteria " << i
+            std::cout << "\033[1;35mWARNING: [Criteria " << i + 1
                       << "] Sample rejected after Student T test.\033[0m" << std::endl;
             rejected_info[i].addData(traverse_info[i].num_samples,
                                      traverse_info[i].mean,
@@ -375,7 +371,7 @@ struct segmentedTerrain
             return true;
         else
         {
-            std::cout << "\033[1;35mWARNING: [Criteria " << i
+            std::cout << "\033[1;35mWARNING: [Criteria " << i + 1
                       << "] Sample rejected after Cochran T test.\033[0m" << std::endl;
             return false;
         }
@@ -578,8 +574,9 @@ class DyMuPathPlanner
     // COST RATIO UPDATING AFTER TRAVERSE (CoRa)
 
     bool initCoRaMethod(int num_terrains_, int num_criteria_, std::vector<double> weights_);
-    int getTerrain(base::Waypoint current_pos);
+    int getTerrain(base::samples::RigidBodyState current_pos);
     bool fillTerrainInfo(int terrain_id, std::vector<double> data);
+    int getReconnectingIndex();
 
     std::vector<double> updateCost();
     std::vector<double> computeCostRatio();
