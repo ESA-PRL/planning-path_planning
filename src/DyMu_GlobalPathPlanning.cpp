@@ -927,9 +927,13 @@ std::vector<double> DyMuPathPlanner::computeCostRatio()
             {
                 double sum = 0;
                 for (int j = 0; j < num_criteria; j++)
-                    sum += weights[j] * terrain_vector[i].criteria_info[j].mean
-                           / terrain_vector[i + next].criteria_info[j].mean;
-                cost_ratios.push_back(sum / acc_weight);
+                {
+                    if (!terrain_vector[i].criteria_info[j].empty
+                        && !terrain_vector[i + next].criteria_info[j].empty)
+                        sum += weights[j] * terrain_vector[i].criteria_info[j].mean
+                               / terrain_vector[i + next].criteria_info[j].mean;
+                }
+                if (sum != 0) cost_ratios.push_back(sum / acc_weight);
             }
         }
     }
