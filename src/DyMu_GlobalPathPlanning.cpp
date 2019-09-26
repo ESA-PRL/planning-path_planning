@@ -814,6 +814,9 @@ double DyMuPathPlanner::getTotalCost(base::Waypoint wInt)
     }
 }
 
+/**********************INITIALIZE COST RATIOS METHOD***************************/
+// In function of the number of segmented terrains and criterias used,
+// the method is initialized
 bool DyMuPathPlanner::initCoRaMethod(int num_terrains_,
                                      int num_criteria_,
                                      std::vector<double> weights_)
@@ -843,6 +846,8 @@ bool DyMuPathPlanner::initCoRaMethod(int num_terrains_,
         return false;
 }
 
+/******************ADD TRAVERSE FEEDBACK INFO TO THE METHOD********************/
+// Receives a data vector with -1 for criterias without info
 bool DyMuPathPlanner::fillTerrainInfo(int terrain_id, std::vector<double> data)
 {
     terrain_vector[terrain_id].dataAnalysis();
@@ -856,6 +861,8 @@ bool DyMuPathPlanner::fillTerrainInfo(int terrain_id, std::vector<double> data)
         return false;
 }
 
+/***************************GET CURRENT TERRAIN ID*****************************/
+// Gets the terrain currently being traversed in function of the position
 int DyMuPathPlanner::getTerrain(base::samples::RigidBodyState current_pos)
 {
     int terrain_index;
@@ -867,6 +874,10 @@ int DyMuPathPlanner::getTerrain(base::samples::RigidBodyState current_pos)
     return terrain_index;
 }
 
+/*********************UPDATE COST VECTOR USING TRAVERSE INFO*******************/
+// Cost ratios method: the traverse info is analysed, evaluated and
+// used to compare the performance of the rover on the different terrains,
+// computing at the end a new value for the cost of each terrain
 std::vector<double> DyMuPathPlanner::updateCost()
 {
     std::vector<double> cost_data;
@@ -905,6 +916,10 @@ std::vector<double> DyMuPathPlanner::updateCost()
     return cost_lutable;
 }
 
+/**************COMPARE PERFORMANCE ON THE DIFFERENT TERRAINS*******************/
+// Each criteria filled with enough data is compared with the corresponding one
+// of the others terrains, obtaining a cost ratio vector with num_terrains - 1
+// components
 std::vector<double> DyMuPathPlanner::computeCostRatio()
 {
     std::vector<double> cost_ratios;

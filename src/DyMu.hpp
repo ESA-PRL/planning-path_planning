@@ -224,10 +224,13 @@ struct segmentedTerrain
     {
         criteria_info.resize(criteria_info_.size());
         traverse_info.resize(criteria_info_.size());
+        rejected_info.resize(criteria_info_.size());
+        data_samples.resize(criteria_info_.size());
         criteria_info = criteria_info_;
         traversed = true;
     }
 
+    // Procedure to include or not new samples in the accumulated info of a criteria
     void dataAnalysis()
     {
         if (!traversed)
@@ -297,6 +300,7 @@ struct segmentedTerrain
         }
     }
 
+    // Comparison between groups with big number of samples
     bool TTest(int i)
     {
         double n1, n2, s1, s2, x1, x2, t;
@@ -313,6 +317,7 @@ struct segmentedTerrain
         return result;
     }
 
+    // Comparison between standard deviation of two groups
     bool FTest(int i)
     {
         double s1, s2, F;
@@ -328,6 +333,7 @@ struct segmentedTerrain
         return result;
     }
 
+    // Comparison of std deviation of the mean between two groups with similar std deviation
     bool studentTTest(int i)
     {
         double n1, n2, s1, s2, x1, x2, sp, t;
@@ -354,6 +360,7 @@ struct segmentedTerrain
         }
     }
 
+    // Comparison of std deviation of the mean between two groups with different std deviation
     bool cochranTTest(int i)
     {
         double n1, n2, s1, s2, x1, x2, tcal, ttab;
@@ -571,14 +578,23 @@ class DyMuPathPlanner
     std::vector<std::vector<double>> getRiskMatrix(base::Waypoint rover_pos);
     std::vector<std::vector<double>> getDeviationMatrix(base::Waypoint rover_pos);
 
-    // COST RATIO UPDATING AFTER TRAVERSE (CoRa)
-
-    bool initCoRaMethod(int num_terrains_, int num_criteria_, std::vector<double> weights_);
-    int getTerrain(base::samples::RigidBodyState current_pos);
-    bool fillTerrainInfo(int terrain_id, std::vector<double> data);
     int getReconnectingIndex();
 
+    // COST RATIO UPDATING AFTER TRAVERSE (CoRa)
+
+    // Initialize the algorithm including criteria vectors and other variables
+    bool initCoRaMethod(int num_terrains_, int num_criteria_, std::vector<double> weights_);
+
+    // Obtain the terrain currently being traversed
+    int getTerrain(base::samples::RigidBodyState current_pos);
+
+    // Add a sample to the corresponding terrain and criteria
+    bool fillTerrainInfo(int terrain_id, std::vector<double> data);
+
+    // Get a new cost_data vector using the accumulated info of the traverse
     std::vector<double> updateCost();
+
+    // Obtain ratios about which terrain is harder to traverse
     std::vector<double> computeCostRatio();
 };
 
