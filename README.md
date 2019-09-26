@@ -15,7 +15,7 @@ C++ implementation of the Dynamic Multilayered (DyMu) Path Planner, resulting fr
 
 If you use this repository, please reference this paper:
 
-Sánchez Ibáñez, J. Ricardo, Pérez del Pulgar, Carlos J., Azkarate, M., Gerdes, L., García Cerezo, Alfonso. **Dynamic Path Planning for Reconfigurable Rovers using a Multilayered Grid**. *Engineering Applications of Artificial Intelligence*, 2019. (IN PRESS)
+Sánchez Ibáñez, J. Ricardo, Pérez del Pulgar, Carlos J., Azkarate, M., Gerdes, L., García Cerezo, Alfonso. **Dynamic Path Planning for Reconfigurable Rovers using a Multi-layered Grid**. *Engineering Applications of Artificial Intelligence*, 2019. DOI: [10.1016/j.engappai.2019.08.011](https://doi.org/10.1016/j.engappai.2019.08.011)
 
 
 ## Implementations in other languages
