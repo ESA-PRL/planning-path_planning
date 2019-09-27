@@ -44,6 +44,7 @@ struct localNode
     base::Pose2D world_pose;   // In physical Units respect to World Frame
     base::Pose2D parent_pose;  // Position of Global Node Parent In Global Units
     base::Pose2D global_pose;  // Position of this local node in Global Units respect to World Frame
+
     double deviation;
     double total_cost;
     double cost;
@@ -105,6 +106,292 @@ struct globalNode
     }
 };
 
+struct costCriteria
+{
+    int num_samples;
+    double mean;
+    double std_deviation;
+    bool empty;
+    costCriteria(int num_samples_, double mean_, double std_deviation_)
+    {
+        num_samples = num_samples_;
+        mean = mean_;
+        std_deviation = std_deviation_;
+        empty = false;
+    }
+    costCriteria()
+    {
+        num_samples = 0;
+        mean = 0;
+        std_deviation = 0;
+        empty = true;
+    }
+
+    void addData(std::vector<double> new_samples)
+    {
+        int n = new_samples.size();
+        if (n != 0)
+        {
+            double sum = 0;
+            for (int i = 0; i < n; i++)
+            {
+                sum += new_samples[i];
+            }
+            double new_mean = (mean * num_samples + sum) / (num_samples + n);
+
+            if (num_samples + n - 2 > 0)
+            {
+                double acc_diff = 0;
+                for (int i = 0; i < n; i++)
+                {
+                    if (!empty)
+                        acc_diff += (new_samples[i] - mean) * (new_samples[i] - new_mean);
+                    else
+                        acc_diff += pow(new_samples[i] - new_mean, 2);
+                }
+                std_deviation = sqrt((pow(std_deviation, 2) * (num_samples - 1) + acc_diff)
+                                     / (num_samples + n - 2));
+            }
+            else
+                LOG_ERROR_S << "ERROR: not enough samples to obtain standard deviation.";
+
+            num_samples += n;
+            mean = new_mean;
+            empty = false;
+        }
+    }
+
+    void addData(int num_samples_, double mean_, double std_deviation_)
+    {
+        if (num_samples_ != 0)
+        {
+            double new_mean =
+                (mean * num_samples + mean_ * num_samples_) / (num_samples + num_samples_);
+
+            std_deviation = sqrt((pow(std_deviation, 2) * (num_samples - 1)
+                                  + pow(std_deviation_, 2) * (num_samples_ - 1))
+                                 / (num_samples + num_samples_ - 2));
+
+            num_samples += num_samples_;
+            mean = new_mean;
+            empty = false;
+        }
+    }
+
+    void addData(double new_sample)
+    {
+        double new_mean = (mean * num_samples + new_sample) / (num_samples + 1);
+
+        double acc_diff;
+        if (!empty) acc_diff = (new_sample - mean) * (new_sample - new_mean);
+        std_deviation =
+            sqrt((pow(std_deviation, 2) * (num_samples - 1) + acc_diff) / (num_samples + 1 - 2));
+
+        num_samples += 1;
+        mean = new_mean;
+        empty = false;
+    }
+
+    void erase()
+    {
+        num_samples = 0;
+        mean = 0;
+        std_deviation = 0;
+        empty = true;
+    }
+};
+
+struct segmentedTerrain
+{
+    double cost;
+    double slope_ratio;  // Ratio of increasing cost per degree (u/°)
+    std::vector<costCriteria> criteria_info, traverse_info, rejected_info;
+    std::vector<std::vector<double>> data_samples;
+    bool traversed;
+    segmentedTerrain()
+    {
+        cost = 1;
+        slope_ratio = 1;
+        traversed = false;
+    }
+    segmentedTerrain(double cost_, double slope_ratio_)
+    {
+        cost = cost_;
+        slope_ratio = slope_ratio_;
+        traversed = false;
+    }
+    segmentedTerrain(std::vector<costCriteria> criteria_info_)
+    {
+        criteria_info.resize(criteria_info_.size());
+        traverse_info.resize(criteria_info_.size());
+        rejected_info.resize(criteria_info_.size());
+        data_samples.resize(criteria_info_.size());
+        criteria_info = criteria_info_;
+        traversed = true;
+    }
+
+    // Procedure to include or not new samples in the accumulated info of a criteria
+    void dataAnalysis()
+    {
+        if (!traversed)
+        {
+            for (int i = 0; i < criteria_info.size(); i++)
+            {
+                if (data_samples[i].size() > 2)
+                {
+                    criteria_info[i].addData(data_samples[i]);
+                    data_samples[i].erase(data_samples[i].begin(), data_samples[i].end());
+                }
+
+                if (criteria_info[i].num_samples > 29)
+                {
+                    traversed = true;
+                    std::cout << "\033[1;32mNow we have gathered enough info of the "
+                                 "current terrain.\033[0m"
+                              << std::endl;
+                }
+            }
+        }
+        else
+        {
+            for (int i = 0; i < criteria_info.size(); i++)
+            {
+                if (criteria_info[i].num_samples > 29)
+                {
+                    if (data_samples[i].size() > 9)
+                    {
+                        traverse_info[i].addData(data_samples[i]);
+                        if (FTest(i))
+                            criteria_info[i].addData(traverse_info[i].num_samples,
+                                                     traverse_info[i].mean,
+                                                     traverse_info[i].std_deviation);
+
+                        data_samples[i].erase(data_samples[i].begin(), data_samples[i].end());
+                        traverse_info[i].erase();
+                    }
+                    if (rejected_info[i].num_samples > 29)
+                    {
+                        if (TTest(i))
+                            criteria_info[i].addData(rejected_info[i].num_samples,
+                                                     rejected_info[i].mean,
+                                                     rejected_info[i].std_deviation);
+                        else if (rejected_info[i].num_samples >= criteria_info[i].num_samples
+                                 && rejected_info[i].std_deviation < criteria_info[i].std_deviation)
+                        {
+                            LOG_WARN_S << "\033[1;35mWARNING: [Criteria " << i + 1
+                                       << "] The amount and quality of the rejected samples is "
+                                          "greater than the saved ones, now we are using the "
+                                          "rejected info as the correct one. \033[0m";
+                            traverse_info[i].erase();
+                            traverse_info[i].addData(criteria_info[i].num_samples,
+                                                     criteria_info[i].mean,
+                                                     criteria_info[i].std_deviation);
+                            criteria_info[i].erase();
+                            criteria_info[i].addData(rejected_info[i].num_samples,
+                                                     rejected_info[i].mean,
+                                                     rejected_info[i].std_deviation);
+                            rejected_info[i].erase();
+                            rejected_info[i].addData(traverse_info[i].num_samples,
+                                                     traverse_info[i].mean,
+                                                     traverse_info[i].std_deviation);
+                            traverse_info[i].erase();
+                        }
+                    }
+                }
+                else
+                {
+                    criteria_info[i].addData(data_samples[i]);
+                    data_samples[i].erase(data_samples[i].begin(), data_samples[i].end());
+                }
+            }
+        }
+    }
+
+    // Comparison between groups with big number of samples
+    bool TTest(int i)
+    {
+        double n1, n2, s1, s2, x1, x2, t;
+        n1 = criteria_info[i].num_samples;
+        n2 = rejected_info[i].num_samples;
+        s1 = criteria_info[i].std_deviation;
+        s2 = rejected_info[i].std_deviation;
+        x1 = criteria_info[i].mean;
+        x2 = rejected_info[i].mean;
+
+        bool result = false;
+        t = abs(x1 - x2) / sqrt(pow(s1, 2) / n1 + pow(s2, 2) / n2);
+        if (t < 2.00) result = true;
+        return result;
+    }
+
+    // Comparison between standard deviation of two groups
+    bool FTest(int i)
+    {
+        double s1, s2, F;
+        bool result;
+        s1 = traverse_info[i].std_deviation;
+        s2 = criteria_info[i].std_deviation;
+
+        F = pow(s1, 2) / pow(s2, 2);
+        if (F < 2.05)
+            result = studentTTest(i);
+        else
+            result = cochranTTest(i);
+        return result;
+    }
+
+    // Comparison of std deviation of the mean between two groups with similar std deviation
+    bool studentTTest(int i)
+    {
+        double n1, n2, s1, s2, x1, x2, sp, t;
+        n1 = criteria_info[i].num_samples;
+        n2 = traverse_info[i].num_samples;
+        s1 = criteria_info[i].std_deviation;
+        s2 = traverse_info[i].std_deviation;
+        x1 = criteria_info[i].mean;
+        x2 = traverse_info[i].mean;
+
+        sp = sqrt(((n1 - 1) * pow(s1, 2) + (n2 - 1) * pow(s2, 2)) / (n1 + n2 - 2));
+        t = sqrt(n1 * n2 / (n1 + n2)) * (x1 - x2) / sp;
+        if (t < 2.02)
+            return true;
+        else
+        {
+            LOG_WARN_S << "\033[1;35mWARNING: [Criteria " << i + 1
+                       << "] Sample rejected after Student T test.\033[0m";
+            rejected_info[i].addData(traverse_info[i].num_samples,
+                                     traverse_info[i].mean,
+                                     traverse_info[i].std_deviation);
+
+            return false;
+        }
+    }
+
+    // Comparison of std deviation of the mean between two groups with different std deviation
+    bool cochranTTest(int i)
+    {
+        double n1, n2, s1, s2, x1, x2, tcal, ttab;
+        n1 = criteria_info[i].num_samples;
+        n2 = traverse_info[i].num_samples;
+        s1 = criteria_info[i].std_deviation;
+        s2 = traverse_info[i].std_deviation;
+        x1 = criteria_info[i].mean;
+        x2 = traverse_info[i].mean;
+
+        tcal = (x1 - x2) / sqrt(pow(s1, 2) / n1 + pow(s2, 2) / n2);
+        ttab =
+            (2.02 * pow(s1, 2) / n1 + 2.22 * pow(s2, 2) / n2) / (pow(s1, 2) / n1 + pow(s2, 2) / n2);
+        if (tcal < ttab)
+            return true;
+        else
+        {
+            LOG_WARN_S << "\033[1;35mWARNING: [Criteria " << i + 1
+                       << "] Sample rejected after Cochran T test.\033[0m";
+            return false;
+        }
+    }
+};
+
 //__DYMU_PATH_PLANNER_CLASS__
 class DyMuPathPlanner
 {
@@ -137,6 +424,18 @@ class DyMuPathPlanner
     std::vector<std::string> locomotion_modes;
     // Approach chosen to do the repairings
     repairingAproach repairing_approach;
+
+    // Cost ratio updating
+    // Vector of terrain segmentation info
+    std::vector<segmentedTerrain> terrain_vector;
+    // Vector of criteria weights
+    std::vector<double> weights;
+    // Number of segmented terrains
+    int num_terrains;
+    // Number of parameters used for cost updating
+    int num_criteria;
+    // Base speed to obtain costs
+    double base_speed;
 
   public:
     // -- PARAMETERS --
@@ -183,7 +482,7 @@ class DyMuPathPlanner
 
     bool setCostMap(std::vector<std::vector<double>> cost_map);
 
-    bool computeCostMap(std::vector<double> costData,
+    bool computeCostMap(std::vector<double> cost_data,
                         std::vector<double> slope_values,
                         std::vector<std::string> locomotionModes,
                         std::vector<std::vector<double>> elevation,
@@ -287,6 +586,25 @@ class DyMuPathPlanner
 
     std::vector<std::vector<double>> getRiskMatrix(base::Waypoint rover_pos);
     std::vector<std::vector<double>> getDeviationMatrix(base::Waypoint rover_pos);
+
+    int getReconnectingIndex();
+
+    // COST RATIO UPDATING AFTER TRAVERSE (CoRa)
+
+    // Initialize the algorithm including criteria vectors and other variables
+    bool initCoRaMethod(int num_terrains_, int num_criteria_, std::vector<double> weights_);
+
+    // Obtain the terrain currently being traversed
+    int getTerrain(base::samples::RigidBodyState current_pos);
+
+    // Add a sample to the corresponding terrain and criteria
+    bool fillTerrainInfo(int terrain_id, std::vector<double> data);
+
+    // Get a new cost_data vector using the accumulated info of the traverse
+    std::vector<double> updateCost();
+
+    // Obtain ratios about which terrain is harder to traverse
+    std::vector<double> computeCostRatio();
 };
 
 }  // end namespace

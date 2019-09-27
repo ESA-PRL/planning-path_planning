@@ -142,13 +142,13 @@ bool DyMuPathPlanner::setCostMap(std::vector<std::vector<double>> cost_map)
 // First, slope values are computed
 // Then, by means of the Cost LookUp Table, cost values are assigned
 // Cost may be smoothed to eliminate heavy discontinuities
-bool DyMuPathPlanner::computeCostMap(std::vector<double> costData,
+bool DyMuPathPlanner::computeCostMap(std::vector<double> cost_data,
                                      std::vector<double> slope_values,
                                      std::vector<std::string> locomotionModes,
                                      std::vector<std::vector<double>> elevation,
                                      std::vector<std::vector<double>> terrainMap)
 {
-    this->cost_lutable = costData;
+    this->cost_lutable = cost_data;
     this->slope_range = slope_values;
     this->locomotion_modes = locomotionModes;
 
@@ -157,6 +157,7 @@ bool DyMuPathPlanner::computeCostMap(std::vector<double> costData,
     for (uint j = 0; j < num_nodes_Y; j++)
         for (uint i = 0; i < num_nodes_X; i++)
         {
+            global_layer[j][i]->raw_cost = 0;  // Reset raw_cost for updating costs
             global_layer[j][i]->elevation = elevation[j][i];
             if ((i == 0) || (j == 0) || (i == num_nodes_X - 1) || (j == num_nodes_Y - 1))
                 global_layer[j][i]->terrain = 0;  // Ensures borders are obstacles
@@ -547,12 +548,12 @@ globalNode* DyMuPathPlanner::minCostGlobalNode()
     globalNode* nodePointer = global_narrowband.front();
     uint index = 0;
     uint i;
-    double minCost = global_narrowband.front()->total_cost;
+    double min_cost = global_narrowband.front()->total_cost;
     for (i = 0; i < global_narrowband.size(); i++)
     {
-        if (global_narrowband[i]->total_cost < minCost)
+        if (global_narrowband[i]->total_cost < min_cost)
         {
-            minCost = global_narrowband[i]->total_cost;
+            min_cost = global_narrowband[i]->total_cost;
             nodePointer = global_narrowband[i];
             index = i;
         }
@@ -864,4 +865,151 @@ double DyMuPathPlanner::getTotalCost(base::Waypoint wInt)
         double w11 = node11->total_cost;
         return w00 + (w10 - w00) * a + (w01 - w00) * b + (w11 + w00 - w10 - w01) * a * b;
     }
+}
+
+/**********************INITIALIZE COST RATIOS METHOD***************************/
+// In function of the number of segmented terrains and criterias used,
+// the method is initialized
+bool DyMuPathPlanner::initCoRaMethod(int num_terrains_,
+                                     int num_criteria_,
+                                     std::vector<double> weights_)
+{
+    num_terrains = num_terrains_;
+    num_criteria = num_criteria_;
+
+    base_speed = cost_lutable[0];
+    for (int i = 1; i < cost_lutable.size(); i++)
+        if (base_speed > cost_lutable[i]) base_speed = cost_lutable[i];
+
+    if (weights_.size() == num_criteria)
+    {
+        weights.resize(num_criteria);
+        weights = weights_;
+        terrain_vector.resize(num_terrains);
+        for (int i = 0; i < num_terrains; i++)
+        {
+            terrain_vector[i].criteria_info.resize(num_criteria);
+            terrain_vector[i].traverse_info.resize(num_criteria);
+            terrain_vector[i].rejected_info.resize(num_criteria);
+            terrain_vector[i].data_samples.resize(num_criteria);
+        }
+        return true;
+    }
+    else
+        return false;
+}
+
+/******************ADD TRAVERSE FEEDBACK INFO TO THE METHOD********************/
+// Receives a data vector with -1 for criterias without info
+bool DyMuPathPlanner::fillTerrainInfo(int terrain_id, std::vector<double> data)
+{
+    terrain_vector[terrain_id].dataAnalysis();
+    if (data.size() == num_criteria)
+    {
+        for (int i = 0; i < num_criteria; i++)
+            if (data[i] > 0) terrain_vector[terrain_id].data_samples[i].push_back(data[i]);
+        return true;
+    }
+    else
+        return false;
+}
+
+/***************************GET CURRENT TERRAIN ID*****************************/
+// Gets the terrain currently being traversed in function of the position
+int DyMuPathPlanner::getTerrain(base::samples::RigidBodyState current_pos)
+{
+    int terrain_index;
+    base::Pose2D pose;
+    pose.position[0] = current_pos.position[0];
+    pose.position[1] = current_pos.position[1];
+    globalNode* current_node = getNearestGlobalNode(pose);
+    terrain_index = current_node->terrain - 1;
+    return terrain_index;
+}
+
+/*********************UPDATE COST VECTOR USING TRAVERSE INFO*******************/
+// Cost ratios method: the traverse info is analysed, evaluated and
+// used to compare the performance of the rover on the different terrains,
+// computing at the end a new value for the cost of each terrain
+std::vector<double> DyMuPathPlanner::updateCost()
+{
+    std::vector<double> cost_data;
+    cost_data.push_back(1);
+
+    int range = slope_range.size();
+    int numLocs = locomotion_modes.size();
+
+    for (int i = 0; i < num_terrains; i++) terrain_vector[i].dataAnalysis();
+
+    std::vector<double> cost_ratios = computeCostRatio();
+
+    int n = cost_ratios.size();
+    for (int i = 0; i < n; i++) cost_data.push_back(cost_data[i] / cost_ratios[i]);
+
+    double min_cost = cost_data[0];
+    for (int i = 1; i < n + 1; i++)
+        if (min_cost > cost_data[i]) min_cost = cost_data[i];
+
+    int counter = 0;
+    for (int i = 0; i < num_terrains; i++)
+    {
+        if (terrain_vector[i].traversed)
+        {
+            double acc = 0;
+            for (int j = 0; j < range; j++)
+            {
+                acc += terrain_vector[i].slope_ratio * slope_range[j];
+                cost_lutable[(i + 1) * range * numLocs + j] =
+                    base_speed * cost_data[counter] / min_cost + acc;
+            }
+            counter++;
+        }
+    }
+
+    return cost_lutable;
+}
+
+/**************COMPARE PERFORMANCE ON THE DIFFERENT TERRAINS*******************/
+// Each criteria filled with enough data is compared with the corresponding one
+// of the others terrains, obtaining a cost ratio vector with num_terrains - 1
+// components
+std::vector<double> DyMuPathPlanner::computeCostRatio()
+{
+    std::vector<double> cost_ratios;
+    double acc_weight = std::accumulate(weights.begin(), weights.end(), 0.0);
+    for (int i = 0; i < num_terrains - 1; i++)
+    {
+        if (terrain_vector[i].traversed)
+        {
+            int next = 1;
+            bool cond = false;
+            while (!cond)
+            {
+                if (!terrain_vector[i + next].traversed)
+                    next += 1;
+                else
+                    cond = true;
+                if (!(i + next < num_terrains)) cond = true;
+            }
+            if (i + next < num_terrains)
+            {
+                double sum = 0;
+                for (int j = 0; j < num_criteria; j++)
+                {
+                    if (!terrain_vector[i].criteria_info[j].empty
+                        && !terrain_vector[i + next].criteria_info[j].empty)
+                    {
+                        sum += weights[j] * terrain_vector[i].criteria_info[j].mean
+                               / terrain_vector[i + next].criteria_info[j].mean;
+                        LOG_DEBUG_S << "Criteria " << j << ", terrain " << i << ": "
+                                    << terrain_vector[i].criteria_info[j].mean;
+                        LOG_DEBUG_S << "Criteria " << j << ", terrain " << i + next << ": "
+                                    << terrain_vector[i + next].criteria_info[j].mean;
+                    }
+                }
+                if (sum != 0) cost_ratios.push_back(sum / acc_weight);
+            }
+        }
+    }
+    return cost_ratios;
 }
