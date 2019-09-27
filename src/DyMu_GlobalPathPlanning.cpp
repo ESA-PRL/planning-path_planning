@@ -157,6 +157,7 @@ bool DyMuPathPlanner::computeCostMap(std::vector<double> cost_data,
     for (uint j = 0; j < num_nodes_Y; j++)
         for (uint i = 0; i < num_nodes_X; i++)
         {
+            global_layer[j][i]->raw_cost = 0;  // Reset raw_cost for updating costs
             global_layer[j][i]->elevation = elevation[j][i];
             if ((i == 0) || (j == 0) || (i == num_nodes_X - 1) || (j == num_nodes_Y - 1))
                 global_layer[j][i]->terrain = 0;  // Ensures borders are obstacles
@@ -945,8 +946,14 @@ std::vector<double> DyMuPathPlanner::computeCostRatio()
                 {
                     if (!terrain_vector[i].criteria_info[j].empty
                         && !terrain_vector[i + next].criteria_info[j].empty)
+                    {
                         sum += weights[j] * terrain_vector[i].criteria_info[j].mean
                                / terrain_vector[i + next].criteria_info[j].mean;
+                        LOG_DEBUG_S << "Criteria " << j << ", terrain " << i << ": "
+                                    << terrain_vector[i].criteria_info[j].mean;
+                        LOG_DEBUG_S << "Criteria " << j << ", terrain " << i + next << ": "
+                                    << terrain_vector[i + next].criteria_info[j].mean;
+                    }
                 }
                 if (sum != 0) cost_ratios.push_back(sum / acc_weight);
             }

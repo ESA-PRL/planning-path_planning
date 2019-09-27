@@ -153,7 +153,7 @@ struct costCriteria
                                      / (num_samples + n - 2));
             }
             else
-                std::cout << "ERROR: not enough samples to obtain standard deviation." << std::endl;
+                LOG_ERROR_S << "ERROR: not enough samples to obtain standard deviation.";
 
             num_samples += n;
             mean = new_mean;
@@ -256,45 +256,52 @@ struct segmentedTerrain
         {
             for (int i = 0; i < criteria_info.size(); i++)
             {
-                if (data_samples[i].size() > 9)
+                if (criteria_info[i].num_samples > 29)
                 {
-                    traverse_info[i].addData(data_samples[i]);
-                    if (FTest(i))
-                        criteria_info[i].addData(traverse_info[i].num_samples,
-                                                 traverse_info[i].mean,
-                                                 traverse_info[i].std_deviation);
-
-                    data_samples[i].erase(data_samples[i].begin(), data_samples[i].end());
-                    traverse_info[i].erase();
-                }
-                if (rejected_info[i].num_samples > 29)
-                {
-                    if (TTest(i))
-                        criteria_info[i].addData(rejected_info[i].num_samples,
-                                                 rejected_info[i].mean,
-                                                 rejected_info[i].std_deviation);
-                    else if (rejected_info[i].num_samples >= criteria_info[i].num_samples
-                             && rejected_info[i].std_deviation < criteria_info[i].std_deviation)
+                    if (data_samples[i].size() > 9)
                     {
-                        std::cout << "\033[1;35mWARNING: [Criteria " << i + 1
-                                  << "] The amount and quality of the rejected samples is "
-                                     "greater than the saved ones, now we are using the "
-                                     "rejected info as the correct one. \033[0m"
-                                  << std::endl;
-                        traverse_info[i].erase();
-                        traverse_info[i].addData(criteria_info[i].num_samples,
-                                                 criteria_info[i].mean,
-                                                 criteria_info[i].std_deviation);
-                        criteria_info[i].erase();
-                        criteria_info[i].addData(rejected_info[i].num_samples,
-                                                 rejected_info[i].mean,
-                                                 rejected_info[i].std_deviation);
-                        rejected_info[i].erase();
-                        rejected_info[i].addData(traverse_info[i].num_samples,
-                                                 traverse_info[i].mean,
-                                                 traverse_info[i].std_deviation);
+                        traverse_info[i].addData(data_samples[i]);
+                        if (FTest(i))
+                            criteria_info[i].addData(traverse_info[i].num_samples,
+                                                     traverse_info[i].mean,
+                                                     traverse_info[i].std_deviation);
+
+                        data_samples[i].erase(data_samples[i].begin(), data_samples[i].end());
                         traverse_info[i].erase();
                     }
+                    if (rejected_info[i].num_samples > 29)
+                    {
+                        if (TTest(i))
+                            criteria_info[i].addData(rejected_info[i].num_samples,
+                                                     rejected_info[i].mean,
+                                                     rejected_info[i].std_deviation);
+                        else if (rejected_info[i].num_samples >= criteria_info[i].num_samples
+                                 && rejected_info[i].std_deviation < criteria_info[i].std_deviation)
+                        {
+                            LOG_WARN_S << "\033[1;35mWARNING: [Criteria " << i + 1
+                                       << "] The amount and quality of the rejected samples is "
+                                          "greater than the saved ones, now we are using the "
+                                          "rejected info as the correct one. \033[0m";
+                            traverse_info[i].erase();
+                            traverse_info[i].addData(criteria_info[i].num_samples,
+                                                     criteria_info[i].mean,
+                                                     criteria_info[i].std_deviation);
+                            criteria_info[i].erase();
+                            criteria_info[i].addData(rejected_info[i].num_samples,
+                                                     rejected_info[i].mean,
+                                                     rejected_info[i].std_deviation);
+                            rejected_info[i].erase();
+                            rejected_info[i].addData(traverse_info[i].num_samples,
+                                                     traverse_info[i].mean,
+                                                     traverse_info[i].std_deviation);
+                            traverse_info[i].erase();
+                        }
+                    }
+                }
+                else
+                {
+                    criteria_info[i].addData(data_samples[i]);
+                    data_samples[i].erase(data_samples[i].begin(), data_samples[i].end());
                 }
             }
         }
@@ -350,8 +357,8 @@ struct segmentedTerrain
             return true;
         else
         {
-            std::cout << "\033[1;35mWARNING: [Criteria " << i + 1
-                      << "] Sample rejected after Student T test.\033[0m" << std::endl;
+            LOG_WARN_S << "\033[1;35mWARNING: [Criteria " << i + 1
+                       << "] Sample rejected after Student T test.\033[0m";
             rejected_info[i].addData(traverse_info[i].num_samples,
                                      traverse_info[i].mean,
                                      traverse_info[i].std_deviation);
@@ -378,8 +385,8 @@ struct segmentedTerrain
             return true;
         else
         {
-            std::cout << "\033[1;35mWARNING: [Criteria " << i + 1
-                      << "] Sample rejected after Cochran T test.\033[0m" << std::endl;
+            LOG_WARN_S << "\033[1;35mWARNING: [Criteria " << i + 1
+                       << "] Sample rejected after Cochran T test.\033[0m";
             return false;
         }
     }
