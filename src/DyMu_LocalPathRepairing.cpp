@@ -13,8 +13,7 @@
 
 #include "DyMu.hpp"
 #include <math.h>
-#include <stdio.h>
-#include <stdlib.h>
+#include <iostream>
 
 using namespace PathPlanning_lib;
 
@@ -247,6 +246,11 @@ bool DyMuPathPlanner::computeLocalPlanning(base::Waypoint wPos,
                 // If pixel is obstacle (value == 1)
                 if ((!lNode->isObstacle) && ((value != 0) || (gNode->isObstacle)))
                 {
+                    //unsigned int index =
+                    //    j * traversabilityMap.getRowSize() + i * traversabilityMap.getPixelSize();
+                    //std::cout << "pixel is obstacle - index: " << index
+                    //          << " value: " << (unsigned int)value << std::endl;
+
                     lNode->isObstacle = true;
                     local_expandable_obstacles.push_back(lNode);
                     lNode->risk = 1.0;
@@ -270,6 +274,7 @@ bool DyMuPathPlanner::computeLocalPlanning(base::Waypoint wPos,
         }
     if ((pathBlocked) && (maxIndex > minIndex))
     {
+        std::cout << "path blocked" << std::endl;
         base::Time tInit = base::Time::now();
         expandRisk();
         trajectory.clear();
