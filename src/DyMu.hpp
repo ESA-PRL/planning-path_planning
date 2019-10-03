@@ -22,6 +22,11 @@
 #include <base-logging/Logging.hpp>
 
 //#define INF 100000000 //Change this value to maximum available for float type
+#define UNSEEN 0
+#define TRAVERSABLE 128
+#define OBSTACLE 255
+
+
 
 namespace PathPlanning_lib
 {

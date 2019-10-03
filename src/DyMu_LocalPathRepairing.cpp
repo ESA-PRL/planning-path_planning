@@ -243,8 +243,8 @@ bool DyMuPathPlanner::computeLocalPlanning(base::Waypoint wPos,
                 lNode = getLocalNode(pos);
                 gNode = getNearestGlobalNode(lNode->parent_pose);
 
-                // If pixel is obstacle (value == 1)
-                if ((!lNode->isObstacle) && ((value != 0) || (gNode->isObstacle)))
+                // If pixel is obstacle (value == 128)
+                if ((!lNode->isObstacle) && ((value == OBSTACLE) || (gNode->isObstacle)))
                 {
                     //unsigned int index =
                     //    j * traversabilityMap.getRowSize() + i * traversabilityMap.getPixelSize();
