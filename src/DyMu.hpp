@@ -577,10 +577,10 @@ class DyMuPathPlanner
 
     bool evaluatePath(uint starting_index);
 
-    bool isBlockingObstacle(localNode* obNode, uint& maxIndex, uint& minIndex);
+    bool isBlockingObstacle(localNode* obNode, uint& maxIndex, uint& minIndex, uint& safe_index);
 
     // void repairPath(std::vector<base::Waypoint>& trajectory, uint minIndex, uint maxIndex);
-    int repairPath(base::Waypoint wInit, uint index);
+    int repairPath(base::Waypoint wInit, uint safe_index, uint index);
 
     // TODO: Make function to change repairing approach anytime
 
