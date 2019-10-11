@@ -577,7 +577,7 @@ class DyMuPathPlanner
 
     bool evaluatePath(uint starting_index);
 
-    bool isBlockingObstacle(localNode* obNode, uint& maxIndex, uint& minIndex, uint& safe_index);
+    bool isBlockingObstacle(localNode* obNode, uint& maxIndex, uint& minIndex, std::vector<bool>& waypoint_blocked);
 
     // void repairPath(std::vector<base::Waypoint>& trajectory, uint minIndex, uint maxIndex);
     int repairPath(base::Waypoint wInit, uint safe_index, uint index);

@@ -216,6 +216,7 @@ bool DyMuPathPlanner::computeLocalPlanning(base::Waypoint wPos,
     // Indexes of the minimum and maximum waypoints affected in the trajectory by
     // obstacles
     uint minIndex = current_path.size(), maxIndex = 0, safe_index = 0;
+    std::vector<bool> waypoint_blocked(trajectory.size(),false);
     bool isBlocked = false;
     bool pathBlocked = false;
 
@@ -255,7 +256,7 @@ bool DyMuPathPlanner::computeLocalPlanning(base::Waypoint wPos,
                     local_expandable_obstacles.push_back(lNode);
                     lNode->risk = 1.0;
                     // See here if its blocking (and which waypoint)
-                    isBlocked = isBlockingObstacle(lNode, maxIndex, minIndex, safe_index);
+                    isBlocked = isBlockingObstacle(lNode, maxIndex, minIndex, waypoint_blocked);
                     // Path is blocked if isBlocked is true at least once
                     pathBlocked = (pathBlocked) ? true : isBlocked;
                     gNode->hazard_density =
@@ -276,6 +277,9 @@ bool DyMuPathPlanner::computeLocalPlanning(base::Waypoint wPos,
     {
         base::Time tInit = base::Time::now();
         expandRisk();
+        for (int i = 0; i < trajectory.size(); i++)
+            if (!waypoint_blocked[i]) 
+                safe_index = (i > safe_index) ? i : safe_index;
         trajectory.clear();
         reconnecting_index = repairPath(wPos, safe_index, maxIndex);
         if (repairing_approach == SWEEPING) evaluatePath(reconnecting_index);
@@ -330,8 +334,8 @@ int DyMuPathPlanner::repairPath(base::Waypoint wayp_start, uint safe_index, uint
     {
         LOG_WARN_S << "As there is no waypoint to reconnect, the path will stop at the last safe "
                       "waypoint: "
-                   << safe_index - 1;
-        current_path.erase(current_path.begin() + safe_index, current_path.end());
+                   << safe_index;
+        current_path.erase(current_path.begin() + safe_index + 1, current_path.end());
         // current_path.clear();
         // current_path.push_back(wayp_start);
         return 0;
@@ -441,7 +445,7 @@ int DyMuPathPlanner::repairPath(base::Waypoint wayp_start, uint safe_index, uint
 bool DyMuPathPlanner::isBlockingObstacle(localNode* obNode,
                                          uint& maxIndex,
                                          uint& minIndex,
-                                         uint& safe_index)
+                                         std::vector<bool>& waypoint_blocked)
 {
     bool isBlocked = false;
     for (uint i = 0; i < current_path.size(); i++)
@@ -454,7 +458,12 @@ bool DyMuPathPlanner::isBlockingObstacle(localNode* obNode,
             {
                 isBlocked = true;
                 minIndex = (i < minIndex) ? i : minIndex;
-                safe_index = (i > safe_index) ? i : safe_index;
+                waypoint_blocked[i] = true;
+                LOG_DEBUG_S << "Waypoint number " << i << ", with position ["
+                           << current_path[i].position[0] << ", " << current_path[i].position[1]
+                           << "], is blocked by the local obstacle with position ["
+                           << obNode->world_pose.position[0] << ", "
+                           << obNode->world_pose.position[1] << "]";
                 // minIndex = max(i,minIndex);
             }
             else
@@ -1072,7 +1081,7 @@ bool DyMuPathPlanner::evaluatePath(uint starting_index)
                 }
                 final_path.insert(
                     final_path.end(), current_path.begin(), current_path.begin() + rectifiedIndex);
-                index_waypoint = repairPath(current_path[rectifiedIndex], 0, index_waypoint);
+                index_waypoint = repairPath(current_path[rectifiedIndex], -1, index_waypoint);
                 isBlocked = false;
                 minIndex = 0;
             }
@@ -1094,7 +1103,7 @@ bool DyMuPathPlanner::evaluatePath(uint starting_index)
             }
             final_path.insert(
                 final_path.end(), current_path.begin(), current_path.begin() + rectifiedIndex);
-            index_waypoint = repairPath(current_path[rectifiedIndex], 0, index_waypoint);
+            index_waypoint = repairPath(current_path[rectifiedIndex], -1, index_waypoint);
             isBlocked = false;
             minIndex = 0;
         }
