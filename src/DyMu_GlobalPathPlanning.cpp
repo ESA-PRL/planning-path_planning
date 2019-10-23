@@ -951,20 +951,21 @@ std::vector<double> DyMuPathPlanner::updateCost()
         if (min_cost > cost_data[i]) min_cost = cost_data[i];
 
     int counter = 0;
-    for (int i = 0; i < num_terrains; i++)
-    {
-        if (terrain_vector[i].traversed)
+    if (cost_data.size() > 1)
+        for (int i = 0; i < num_terrains; i++)
         {
-            double acc = 0;
-            for (int j = 0; j < range; j++)
+            if (terrain_vector[i].traversed)
             {
-                acc += terrain_vector[i].slope_ratio * slope_range[j];
-                cost_lutable[(i + 1) * range * numLocs + j] =
-                    base_speed * cost_data[counter] / min_cost + acc;
+                double acc = 0;
+                for (int j = 0; j < range; j++)
+                {
+                    acc += terrain_vector[i].slope_ratio * slope_range[j];
+                    cost_lutable[(i + 1) * range * numLocs + j] =
+                        base_speed * cost_data[counter] / min_cost + acc;
+                }
+                counter++;
             }
-            counter++;
         }
-    }
 
     return cost_lutable;
 }
