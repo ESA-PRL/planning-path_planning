@@ -364,7 +364,6 @@ bool DyMuPathPlanner::computeTotalCostMap(base::Waypoint wPos)
     // Check validity of Goal
     if ((global_goal == NULL) || (global_goal->isObstacle))
     {
-        LOG_WARN_S << "The goal is not valid";
         return false;
     }
 
@@ -373,7 +372,6 @@ bool DyMuPathPlanner::computeTotalCostMap(base::Waypoint wPos)
     // Check validity of Global Node closest to wPos
     if (!isSafeNode(startNode))
     {
-        LOG_ERROR_S << "PLANNER: The rover is located too close to an obstacle";
         return false;
     }
 
@@ -393,7 +391,6 @@ bool DyMuPathPlanner::computeTotalCostMap(base::Waypoint wPos)
     }
     if (global_narrowband.empty())
     {
-        LOG_ERROR_S << "The goal is unreachable";
         return false;
     }
     else
@@ -441,7 +438,6 @@ bool DyMuPathPlanner::computeEntireTotalCostMap()
     // Check validity of Goal
     if ((global_goal == NULL) || (global_goal->isObstacle))
     {
-        LOG_WARN_S << "The goal is not valid";
         return false;
     }
 
@@ -469,7 +465,6 @@ void DyMuPathPlanner::resetTotalCostMap()
 {
     if (!global_propagated_nodes.empty())
     {
-        LOG_DEBUG_S << "resetting global nodes for new goal";
         for (uint i = 0; i < global_propagated_nodes.size(); i++)
         {
             global_propagated_nodes[i]->state = OPEN;
@@ -583,14 +578,8 @@ globalNode* DyMuPathPlanner::getNearestGlobalNode(base::Waypoint wPos)
 // obstacles, is returned
 std::vector<base::Waypoint> DyMuPathPlanner::getPath(base::Waypoint wPos)
 {
-    LOG_DEBUG_S << "PLANNER: the robot is at (" << wPos.position[0] << ", " << wPos.position[1]
-                << ") ";
     computeGlobalPath(wPos);
-    LOG_DEBUG_S << "PLANNER: resulting path size = " << current_path.size()
-                << " waypoints, BEFORE evaluation";
     evaluatePath(0);
-    LOG_DEBUG_S << "PLANNER: resulting path size = " << current_path.size()
-                << " waypoints, AFTER evaluation";
     return current_path;
 }
 
@@ -611,19 +600,12 @@ bool DyMuPathPlanner::computeGlobalPath(base::Waypoint wPos)
 
     if (std::isnan(wNext.position[0]) || std::isnan(wNext.position[1]))
     {
-        LOG_ERROR_S << "PLANNER: Gradient Descent Method failed at (" << wNext.position[0] << ", "
-                    << wNext.position[1] << ") ";
         return false;
     }
 
     current_path.push_back(wPos);
 
     wPos = wNext;
-    LOG_DEBUG_S << "PLANNER: the robot is at (" << wPos.position[0] << ", " << wPos.position[1]
-                << ") ";
-
-    LOG_DEBUG_S << "PLANNER: the goal is at (" << sinkPoint.position[0] << ", "
-                << sinkPoint.position[1] << ") ";
 
     while (sqrt(pow((wPos.position[0] - sinkPoint.position[0]), 2)
                 + pow((wPos.position[1] - sinkPoint.position[1]), 2))
@@ -635,12 +617,10 @@ bool DyMuPathPlanner::computeGlobalPath(base::Waypoint wPos)
                  + pow((wPos.position[1] - wNext.position[1]), 2))
             < 0.01 * tau * global_res)
         {
-            LOG_ERROR_S << "ERROR in trajectory";
             return false;
         }
         wPos = wNext;
     }
-    LOG_DEBUG_S << "Adding final waypoint with heading" << sinkPoint.heading;
     current_path.push_back(sinkPoint);
     return true;
 }
@@ -1002,10 +982,6 @@ std::vector<double> DyMuPathPlanner::computeCostRatio()
                     {
                         sum += weights[j] * terrain_vector[i].criteria_info[j].mean
                                / terrain_vector[i + next].criteria_info[j].mean;
-                        LOG_DEBUG_S << "Criteria " << j << ", terrain " << i << ": "
-                                    << terrain_vector[i].criteria_info[j].mean;
-                        LOG_DEBUG_S << "Criteria " << j << ", terrain " << i + next << ": "
-                                    << terrain_vector[i + next].criteria_info[j].mean;
                     }
                 }
                 if (sum != 0) cost_ratios.push_back(sum / acc_weight);

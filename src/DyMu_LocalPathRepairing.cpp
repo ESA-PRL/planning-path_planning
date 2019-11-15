@@ -338,7 +338,6 @@ int DyMuPathPlanner::repairPath(base::Waypoint wayp_start, uint index)
         // Last Waypoint is the goal, only Conservative Approach is permitted
         if (index == current_path.size() - 1)
         {
-            LOG_WARN_S << "Repairing is not possible, goal is too close to obstacles";
             current_path.clear();
             current_path.push_back(wayp_start);
             return -1;
@@ -348,7 +347,6 @@ int DyMuPathPlanner::repairPath(base::Waypoint wayp_start, uint index)
         // Local Planning is aborted because of having entered obstacle area
         if (lSet == NULL)
         {
-            LOG_WARN_S << "Repairing aborted, the robot is in obstacle area";
             std::cout << "global stops at (" << current_path[index].position[0] << ","
                       << current_path[index].position[1] << ")" << std::endl;
             current_path.clear();
@@ -525,7 +523,6 @@ localNode* DyMuPathPlanner::maxRiskNode()
     localNode* nodePointer = local_expandable_obstacles.front();
     uint index = 0;
     double maxRisk = local_expandable_obstacles.front()->risk;
-    // LOG_DEBUG_S << "Size of Narrow Band is: " << this->narrowBand.size();
     for (uint i = 0; i < local_expandable_obstacles.size(); i++)
     {
         if (maxRisk == 1) break;
@@ -537,9 +534,6 @@ localNode* DyMuPathPlanner::maxRiskNode()
             break;
         }
     }
-    /* LOG_DEBUG_S << "next expandable node is  (" <<
-        nodePointer->pose.position[0] << "," <<
-        nodePointer->pose.position[1] << ")";*/
     local_expandable_obstacles.erase(local_expandable_obstacles.begin() + index);
     return nodePointer;
 }
@@ -585,7 +579,6 @@ localNode* DyMuPathPlanner::computeLocalPropagation(base::Waypoint wayp_start,
 
     if (!local_propagated_nodes.empty())
     {
-        LOG_DEBUG_S << "resetting previous closed nodes";
         for (uint i = 0; i < local_propagated_nodes.size(); i++)
         {
             local_propagated_nodes[i]->state = OPEN;
@@ -648,8 +641,6 @@ localNode* DyMuPathPlanner::computeLocalPropagation(base::Waypoint wayp_start,
         else
             nodeTarget = minCostLocalNode(Tovertake, minC);
         nodeTarget->state = CLOSED;
-        // LOG_DEBUG_S << "nodeTarget " << nodeTarget->global_pose.position[0] << "," <<
-        // nodeTarget->global_pose.position[1];
         for (uint i = 0; i < 4; i++)
         {
             if (nodeTarget->nb4List[i] != NULL)
@@ -721,12 +712,6 @@ void DyMuPathPlanner::propagateLocalNode(localNode* nodeTarget)
 
     C = local_res * (risk_ratio * R + 1);
 
-    if (C <= 0)  // TODO: make this function return a false bool
-        LOG_ERROR_S << "C is not positive";
-
-    if (C > std::numeric_limits<double>::infinity())
-        LOG_ERROR_S << "C is higher than std::numeric_limits<double>::infinity()";
-
     // Eikonal Equation
     if ((fabs(Tx - Ty) < C) && (Tx < std::numeric_limits<double>::infinity())
         && (Ty < std::numeric_limits<double>::infinity()))
@@ -755,7 +740,6 @@ localNode* DyMuPathPlanner::minCostLocalNode(double Tovertake, double minC)
         local_narrowband.front()
             ->deviation;  // + fmax(0, local_narrowband.front()->total_cost - Tovertake)/minC;
     double currentH;
-    // LOG_DEBUG_S << "Size of Narrow Band is: " << local_narrowband.size();
     for (i = 0; i < local_narrowband.size(); i++)
     {
         currentH = local_narrowband[i]
@@ -782,7 +766,6 @@ localNode* DyMuPathPlanner::minCostLocalNode(localNode* reachNode)
               2));
     double minH = local_narrowband.front()->deviation + distance;
     double currentH;
-    // LOG_DEBUG_S << "Size of Narrow Band is: " << local_narrowband.size();
     for (i = 0; i < local_narrowband.size(); i++)
     {
         distance = sqrt(
@@ -815,9 +798,6 @@ std::vector<base::Waypoint> DyMuPathPlanner::getLocalPath(localNode* lSetNode,
     std::vector<base::Waypoint> trajectory;
     is_valid_waypoint = computeLocalWaypointGDM(wPos, tau * local_res);
     trajectory.insert(trajectory.begin(), wPos);
-    LOG_DEBUG_S << "repairing trajectory initialized";
-    LOG_DEBUG_S << "lSetNode at " << wPos.position[0] << ", " << wPos.position[1];
-    LOG_DEBUG_S << "wayp_start at " << wayp_start.position[0] << ", " << wayp_start.position[1];
 
     while (sqrt(pow((trajectory.front().position[0] - wayp_start.position[0]), 2)
                 + pow((trajectory.front().position[1] - wayp_start.position[1]), 2))
@@ -832,16 +812,11 @@ std::vector<base::Waypoint> DyMuPathPlanner::getLocalPath(localNode* lSetNode,
             trajectory.insert(trajectory.begin(), wPos);
         else
         {
-            LOG_WARN_S << "WARNING: degenerated gradient";
             localNode* lNode = getLocalNode(trajectory[0]);
             wPos = computeLocalWaypointDijkstra(lNode);
             trajectory.insert(trajectory.begin(), wPos);
         }
     }
-
-    LOG_DEBUG_S << "trajectory front at " << trajectory.front().position[0] << ", "
-                << trajectory.front().position[1];
-    LOG_DEBUG_S << "Local cell size is " << local_res;
     return trajectory;
 }
 

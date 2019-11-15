@@ -1,10 +1,17 @@
 # CMakeLists.txt has to be located in the project folder and cmake has to be
 # executed from 'project/build' with 'cmake ../'.
 cmake_minimum_required(VERSION 2.6)
-find_package(Rock)
-rock_init(path_planning 0.1)
-rock_standard_layout()
 
-add_definitions(-Wall)
-add_definitions(-DBASE_LOG_NAMESPACE=${PROJECT_NAME})
-add_definitions(-DBASE_LOG_WARN)
+project(DyMu_project)
+
+find_package (Eigen3 3.3 REQUIRED NO_MODULE)
+
+add_subdirectory(src)
+#add_subdirectory(tests)
+
+add_executable(runGPPtest
+               tests/globalPathPlanningTest.cpp)
+
+
+target_link_libraries(runGPPtest DyMu_lib)
+

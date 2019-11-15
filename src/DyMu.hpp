@@ -19,8 +19,6 @@
 #include <base/samples/RigidBodyState.hpp>
 #include <vector>
 
-#include <base-logging/Logging.hpp>
-
 //#define INF 100000000 //Change this value to maximum available for float type
 
 namespace PathPlanning_lib
@@ -152,8 +150,6 @@ struct costCriteria
                 std_deviation = sqrt((pow(std_deviation, 2) * (num_samples - 1) + acc_diff)
                                      / (num_samples + n - 2));
             }
-            else
-                LOG_ERROR_S << "ERROR: not enough samples to obtain standard deviation.";
 
             num_samples += n;
             mean = new_mean;
@@ -278,10 +274,6 @@ struct segmentedTerrain
                         else if (rejected_info[i].num_samples >= criteria_info[i].num_samples
                                  && rejected_info[i].std_deviation < criteria_info[i].std_deviation)
                         {
-                            LOG_WARN_S << "\033[1;35mWARNING: [Criteria " << i + 1
-                                       << "] The amount and quality of the rejected samples is "
-                                          "greater than the saved ones, now we are using the "
-                                          "rejected info as the correct one. \033[0m";
                             traverse_info[i].erase();
                             traverse_info[i].addData(criteria_info[i].num_samples,
                                                      criteria_info[i].mean,
@@ -357,8 +349,6 @@ struct segmentedTerrain
             return true;
         else
         {
-            LOG_WARN_S << "\033[1;35mWARNING: [Criteria " << i + 1
-                       << "] Sample rejected after Student T test.\033[0m";
             rejected_info[i].addData(traverse_info[i].num_samples,
                                      traverse_info[i].mean,
                                      traverse_info[i].std_deviation);
@@ -385,8 +375,6 @@ struct segmentedTerrain
             return true;
         else
         {
-            LOG_WARN_S << "\033[1;35mWARNING: [Criteria " << i + 1
-                       << "] Sample rejected after Cochran T test.\033[0m";
             return false;
         }
     }
