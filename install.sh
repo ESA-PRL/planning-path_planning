@@ -1,3 +1,5 @@
+sudo apt-get install -y python-matplotlib cmake
+
 install_folder=$PWD/install
 cur=$PWD
 
@@ -7,6 +9,8 @@ cmake -DCMAKE_INSTALL_PREFIX=$install_folder -DCMAKE_CXX_COMPILER_ARG1=-std=c++1
 make
 
 cd $cur
+
+rm env.sh
 
 echo "export PATH=$PATH:$cur/build" >> env.sh
 echo "DyMu project has been successfully installed"
