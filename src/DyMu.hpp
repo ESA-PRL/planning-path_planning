@@ -18,6 +18,7 @@
 #include <base/samples/Frame.hpp>
 #include <base/samples/RigidBodyState.hpp>
 #include <vector>
+#include <numeric>
 
 //#define INF 100000000 //Change this value to maximum available for float type
 
