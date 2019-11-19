@@ -64,6 +64,8 @@ runGPPtest
 sh viewResults.sh
 ```
 
+![You should see something like this](https://github.com/esa-prl/planning-path_planning/blob/standalone_ver/docs/media/Example_Results.png)
+
 ### Folder structure
 
 | Folder            |       Description                             |
