@@ -32,9 +32,57 @@ Sánchez Ibáñez, J. Ricardo, Pérez del Pulgar, Carlos J., Azkarate, M., Gerde
   doi={10.1016/j.engappai.2019.08.011}
 }
 ```
-
-## Media
+### Media
 
 [Real Experimental Rover using DyMu](https://youtu.be/X4mihNTEVGw)
+
+## C++ Standalone Version guide
+
+### Example Test - Step guide
+
+1. Execute the install script
+
+```
+sh install.sh
+```
+
+2. Source env.sh
+
+```
+. env.sh
+```
+
+3. Execute the test
+
+```
+runGPPtest
+```
+
+4. View the results using python
+
+```
+sh viewResults.sh
+```
+
+### Folder structure
+
+| Folder            |       Description                             |
+| ----------------- | ------------------------                      |
+| data/             | Input data (maps) and saved results           |
+| docs/             | Documentation and media resources             |
+| src/              | DyMu Source files                             |
+| tests/            | Example test file                             |
+| utils/            | Contains scripts to display the results       |
+
+### FAQ
+
+- **How can I define the cost to traverse any terrain?**
+
+A look-up table is created in tests/globalPathPlanningTest.cpp. This table provides the cost according to the type of terrain, the locomotion mode and the slope. We assume terrain #0 is non-traversable terrain, i.e. obstacle. However, a high value of cost must still be defined, since a smoothing process is executed and it helps to increase the value of cost of those traversable nodes located next to the obstacles. This is important in order to avoid the extraction of the path in nodes presenting high discontinuities.
+
+- **Where are the required input maps located?**
+
+They are within the data folder. They are essentially two: the DEM (which contains elevation values), and the terrain map (which contains the terrain index for each node).
+
 
 
