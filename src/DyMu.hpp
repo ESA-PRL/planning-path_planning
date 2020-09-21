@@ -18,6 +18,7 @@
 #include <base/samples/Frame.hpp>
 #include <base/samples/RigidBodyState.hpp>
 #include <vector>
+#include <numeric>
 
 #include <base-logging/Logging.hpp>
 
