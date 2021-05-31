@@ -89,8 +89,8 @@ struct globalNode
     {
         pose.position[0] = (double)x_;
         pose.position[1] = (double)y_;
-        world_pose.position[0] = (double)x_ * res + offset[0];
-        world_pose.position[1] = (double)y_ * res + offset[1];
+        world_pose.position[0] = (double)x_ * res ;
+        world_pose.position[1] = (double)y_ * res ;
         // terrain = (unsigned int) t_;
         // elevation = e_;
 

@@ -321,6 +321,7 @@ globalNode* DyMuPathPlanner::getGlobalNode(uint i, uint j)
 // closest to wGoal is the one chosen.
 bool DyMuPathPlanner::setGoal(base::Waypoint wGoal)
 {
+
     // We transform the position from global coordinates to grid coordinates
     wGoal.position[0] = (wGoal.position[0] - global_offset[0]) / global_res;
     wGoal.position[1] = (wGoal.position[1] - global_offset[1]) / global_res;
@@ -338,6 +339,7 @@ bool DyMuPathPlanner::setGoal(base::Waypoint wGoal)
         || (candidateGoal->nb4List[1] == NULL)
         || (candidateGoal->nb4List[2] == NULL)
         || (candidateGoal->nb4List[3] == NULL))
+            
         return false;
 
     // Check whether it is valid (is not placed next to an obstacle Global Node)
@@ -345,6 +347,7 @@ bool DyMuPathPlanner::setGoal(base::Waypoint wGoal)
         || (candidateGoal->nb4List[1]->isObstacle)
         || (candidateGoal->nb4List[2]->isObstacle)
         || (candidateGoal->nb4List[3]->isObstacle))
+       
         return false;
 
     // At this point, the chosen goal is valid
@@ -360,6 +363,8 @@ bool DyMuPathPlanner::setGoal(base::Waypoint wGoal)
 // the value of total cost of the GLobal node next to the robot pose is computed
 bool DyMuPathPlanner::computeTotalCostMap(base::Waypoint wPos)
 {
+    wPos.position[0] -= global_offset[0];
+    wPos.position[1] -= global_offset[1];
 
     // Check validity of Goal
     if ((global_goal == NULL) || (global_goal->isObstacle))
@@ -585,13 +590,24 @@ std::vector<base::Waypoint> DyMuPathPlanner::getPath(base::Waypoint wPos)
 {
     LOG_DEBUG_S << "PLANNER: the robot is at (" << wPos.position[0] << ", " << wPos.position[1]
                 << ") ";
+    wPos.position[0] -= global_offset[0];
+    wPos.position[1] -= global_offset[1];
     computeGlobalPath(wPos);
     LOG_DEBUG_S << "PLANNER: resulting path size = " << current_path.size()
                 << " waypoints, BEFORE evaluation";
     evaluatePath(0);
     LOG_DEBUG_S << "PLANNER: resulting path size = " << current_path.size()
                 << " waypoints, AFTER evaluation";
-    return current_path;
+    
+    std::vector<base::Waypoint> output_path = current_path;
+    
+    for(int i = 0; i < output_path.size(); i++)
+    {
+        output_path[i].position[0] += global_offset[0];
+        output_path[i].position[1] += global_offset[1];
+    }
+
+    return output_path;
 }
 
 /*********************COMPUTE GLOBAL PATH**************************************/
@@ -652,8 +668,8 @@ base::Waypoint DyMuPathPlanner::computeNextGlobalWaypoint(base::Waypoint& wPos, 
     base::Waypoint wNext;
 
     // Position of wPos in terms of global units
-    double globalXpos = (wPos.position[0] - global_offset[0]) / global_res;
-    double globalYpos = (wPos.position[1] - global_offset[1]) / global_res;
+    double globalXpos = wPos.position[0] / global_res;
+    double globalYpos = wPos.position[1] / global_res;
 
     // Position of the global Node placed next to wPos in the downleft corner
     uint globalCornerX = (uint)(globalXpos);
@@ -771,6 +787,9 @@ double DyMuPathPlanner::interpolate(double a,
 // The locomotion mode that requires lower cost in that location is indicated
 std::string DyMuPathPlanner::getLocomotionMode(base::Waypoint wPos)
 {
+    wPos.position[0] -= global_offset[0];
+    wPos.position[1] -= global_offset[1];
+    
     globalNode* gNode = getNearestGlobalNode(wPos);
     return gNode->nodeLocMode;
 }
@@ -840,8 +859,11 @@ std::vector<std::vector<double>> DyMuPathPlanner::getTrafficabilityMatrix()
 // according to the values of the nearby global nodes.
 double DyMuPathPlanner::getTotalCost(base::Waypoint wInt)
 {
-    uint i = (uint)(wInt.position[0] / global_res);
-    uint j = (uint)(wInt.position[1] / global_res);
+    wInt.position[0] -= global_offset[0];
+    wInt.position[1] -= global_offset[1];
+
+    uint i = (uint)(wInt.position[0]/ global_res);
+    uint j = (uint)(wInt.position[1]/ global_res);
     double a = wInt.position[0] - (double)(i);
     double b = wInt.position[1] - (double)(j);
 
@@ -920,8 +942,8 @@ int DyMuPathPlanner::getTerrain(base::samples::RigidBodyState current_pos)
 {
     int terrain_index;
     base::Pose2D pose;
-    pose.position[0] = current_pos.position[0];
-    pose.position[1] = current_pos.position[1];
+    pose.position[0] = current_pos.position[0] - global_offset[0];
+    pose.position[1] = current_pos.position[1] - global_offset[1];
     globalNode* current_node = getNearestGlobalNode(pose);
     terrain_index = current_node->terrain - 1;
     return terrain_index;

@@ -197,6 +197,9 @@ bool DyMuPathPlanner::computeLocalPlanning(base::Waypoint wPos,
                                            base::Time& localTime)
 {
 
+    wPos.position[0] -= global_offset[0];
+    wPos.position[1] -= global_offset[1];
+
     localNode* lNode;
     globalNode* gNode;
 
